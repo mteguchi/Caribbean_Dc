@@ -1,0 +1,113 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+```
+
+Get data;
+
+```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>% 
+  mutate(lat_band = ifelse(latitude < 26, 25,
+                           ifelse(latitude < 27, 26,
+                                  ifelse(latitude < 28, 27,
+                                         ifelse(latitude < 29, 28,
+                                                ifelse(latitude < 30, 29,
+                                                       ifelse(latitude < 31, 30)))))))
+
+```
+
+
+See what they look like:
+
+```{r}
+ggplot(data = nest.counts) +
+  geom_point(aes(x = year, y = log(nests+1),
+                 color = as.factor(ID))) +
+  geom_line(aes(x = year, y = log(nests + 1),
+                color = as.factor(ID),
+                group = as.factor(ID))) +
+  
+  facet_wrap( ~ lat_band, nrow = 3) +
+  theme(legend.position = "none")
+```
+
+
+Try fitting growth models - we can use the same model as the last paper first. 
+
+```{r}
+X <- cbind(nest.counts$distance - median(nest.counts$distance),
+           nest.counts$days_week - median(nest.counts$days_week),
+           nest.counts$days_year - median(nest.counts$days_year))
+
+nest.counts %>% select(ID, latitude) %>% group_by(ID) %>%
+  summarise(latitude = first(latitude)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2) -> lat.dat 
+
+min(nest.counts$year):max(nest.counts$year)
+
+jags.data <- list(N = length(nest.counts$nests),
+                  nbeach = nrow(lat.dat),
+                  count = nest.counts$nests,
+                  beach = nest.counts$ID,
+                  yearc = nest.counts$year/(median(min(nest.counts$year):max(nest.counts$year))),
+                  X = X,
+                  latc = lat.dat$latc,
+                  latc2 = lat.dat$latc2)
+
+MCMC.params <- list(n.samples = 50000,
+                    n.burnin = 30000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "delta1", "delta2",
+                "floridapc", "probP", "deviance")
+
+# change the model files so that they are more general - 2020-03-10
+
+MCMC.params$model.file = "models/Model_JAGS_Kelly_msadj_ks_run_log_distance.txt"
+
+jm <- jags(data = jags.data,
+           #inits = inits,
+           parameters.to.save= parameters,
+           model.file = MCMC.params$model.file,
+           n.chains = MCMC.params$n.chains,
+           n.burnin = MCMC.params$n.burnin,
+           n.thin = MCMC.params$n.thin,
+           n.iter = MCMC.params$n.samples,
+           DIC = T, 
+           parallel=T)
+
+summary(jm)
+
+mcmc_trace(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
+mcmc_dens(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
+mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
+
+```
+
+
+
+

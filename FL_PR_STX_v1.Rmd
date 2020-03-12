@@ -65,7 +65,7 @@ nest.counts %>% select(ID, latitude) %>% group_by(ID) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2) -> lat.dat 
 
-min(nest.counts$year):max(nest.counts$year)
+#min(nest.counts$year):max(nest.counts$year)
 
 jags.data <- list(N = length(nest.counts$nests),
                   nbeach = nrow(lat.dat),
@@ -76,38 +76,52 @@ jags.data <- list(N = length(nest.counts$nests),
                   latc = lat.dat$latc,
                   latc2 = lat.dat$latc2)
 
-MCMC.params <- list(n.samples = 50000,
-                    n.burnin = 30000,
+MCMC.params <- list(n.samples = 100000,
+                    n.burnin = 50000,
                     n.thin = 5,
                     n.chains = 5)
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "delta1", "delta2",
-                "floridapc", "probP", "deviance")
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred")
 
-# change the model files so that they are more general - 2020-03-10
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
 
-MCMC.params$model.file = "models/Model_JAGS_Kelly_msadj_ks_run_log_distance.txt"
-
-jm <- jags(data = jags.data,
-           #inits = inits,
-           parameters.to.save= parameters,
-           model.file = MCMC.params$model.file,
-           n.chains = MCMC.params$n.chains,
-           n.burnin = MCMC.params$n.burnin,
-           n.thin = MCMC.params$n.thin,
-           n.iter = MCMC.params$n.samples,
-           DIC = T, 
-           parallel=T)
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt.rds")){
+  jm <- jags(data = jags.data,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+  
+  saveRDS(jm, file = "RData/JAGS_out_Dist_rSlope_rInt.rds")
+  
+} else {
+  jm <- readRDS("RData/JAGS_out_Dist_rSlope_rInt.rds")
+}
 
 summary(jm)
 
 mcmc_trace(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
 mcmc_dens(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
 mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
+mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
 
 ```
 
+These parameters look good but some Rhat stats are too high, according to the output comments. 
+
+```{r}
+summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
+
+summary.df %>% filter(Rhat > 1.01)
+```
 
 
 

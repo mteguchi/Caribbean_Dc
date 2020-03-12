@@ -552,8 +552,8 @@ jags.data <- list(N = 1385,
                             0.591, 7.756, 0.009, 0.859, 0.116, 0.514, 0.751, 4.503, 0.135, 
                             0.311, 0.663, 0.015, 2.86, 0.075, 0.061))
 
-MCMC.params <- list(n.samples = 50000,
-                    n.burnin = 30000,
+MCMC.params <- list(n.samples = 100000,
+                    n.burnin = 50000,
                     n.thin = 5,
                     n.chains = 5)
 
@@ -563,16 +563,22 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
 
 MCMC.params$model.file = "models/Model_JAGS_Kelly_A.txt"
 
-jm <- jags(data = jags.data,
-           #inits = inits,
-           parameters.to.save= parameters,
-           model.file = MCMC.params$model.file,
-           n.chains = MCMC.params$n.chains,
-           n.burnin = MCMC.params$n.burnin,
-           n.thin = MCMC.params$n.thin,
-           n.iter = MCMC.params$n.samples,
-           DIC = T, 
-           parallel=T)
+if (!file.exists("RData/JAGS_Kelly_A.rds")){
+  jm <- jags(data = jags.data,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+
+  saveRDS(jm, file = "RData/JAGS_Kelly_A.rds")  
+} else {
+  jm <- readRDS("RData/JAGS_Kelly_A.rds")
+}
 
 summary(jm)
 

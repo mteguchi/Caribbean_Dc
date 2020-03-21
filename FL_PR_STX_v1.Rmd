@@ -123,5 +123,7 @@ summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter")
 summary.df %>% filter(Rhat > 1.01)
 ```
 
+Indices 47 and 61 are problematic for a0 and a1. Find out what the problems are... 
+
 
 

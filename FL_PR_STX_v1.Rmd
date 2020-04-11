@@ -33,7 +33,8 @@ nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>%
                                   ifelse(latitude < 28, 27,
                                          ifelse(latitude < 29, 28,
                                                 ifelse(latitude < 30, 29,
-                                                       ifelse(latitude < 31, 30)))))))
+                                                       ifelse(latitude < 31, 30)))))),
+         beach_f = as.factor(toupper(beach)))
 
 ```
 
@@ -50,6 +51,115 @@ ggplot(data = nest.counts) +
   
   facet_wrap( ~ lat_band, nrow = 3) +
   theme(legend.position = "none")
+```
+
+Plot each beach grouped by latitude band
+
+```{r}
+nest.counts %>% filter(lat_band == 25) -> nest.counts.25
+ggplot(data = nest.counts.25) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID)) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 25")
+```
+
+Too many beaches here so split them into 3 groups.
+
+```{r}
+nest.counts %>% filter(lat_band == 26) -> nest.counts.26
+unique.IDs <- unique(nest.counts.26$ID)
+first.10 <- unique.IDs[1:10]
+nest.counts.26 %>% filter(ID %in% first.10) -> nest.counts.26.1
+
+ggplot(data = nest.counts.26.1) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 26")
+```
+
+```{r}
+second.10 <- unique.IDs[11:20]
+nest.counts.26 %>% filter(ID %in% second.10) -> nest.counts.26.2
+
+ggplot(data = nest.counts.26.2) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 26")
+```
+
+```{r}
+beaches.21.31 <- unique.IDs[21:31]
+nest.counts.26 %>% filter(ID %in% beaches.21.31) -> nest.counts.26.3
+
+ggplot(data = nest.counts.26.3) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 26")
+```
+
+
+```{r}
+nest.counts %>% filter(lat_band == 27) -> nest.counts.27
+ggplot(data = nest.counts.27) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 27")
+```
+
+
+```{r}
+nest.counts %>% filter(lat_band == 28) -> nest.counts.28
+ggplot(data = nest.counts.28) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 28")
+```
+
+
+```{r}
+nest.counts %>% filter(lat_band == 29) -> nest.counts.29
+ggplot(data = nest.counts.29) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 29")
+```
+
+
+```{r}
+nest.counts %>% filter(lat_band == 30) -> nest.counts.30
+ggplot(data = nest.counts.30) +
+  geom_point(aes(x = year, y = log(nests+1))) +
+  geom_line(aes(x = year, y = log(nests + 1))) +
+  facet_wrap( ~ factor(ID), ncol = 3) +
+  theme(legend.position = "none") + 
+  labs(title = "Latitude 30")
+```
+
+Time series are different lengths. 
+
+```{r}
+nest.counts %>% group_by(ID) %>%
+  summarise(n = length(year),
+            latitude = first(latitude),
+            distance = first(distance),
+            lat_band = first(lat_band)) -> nest.counts.n
+
+ggplot(data = nest.counts.n) + 
+  geom_point(aes(x = lat_band, y = n))
 ```
 
 
@@ -123,5 +233,10 @@ summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter")
 summary.df %>% filter(Rhat > 1.01)
 ```
 
+Something is quite wrong... 
+
+```{r}
+summary.df %>% filter(parameter == "a0[1]")
+```
 
 

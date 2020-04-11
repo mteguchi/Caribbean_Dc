@@ -1,0 +1,82 @@
+# simple state space AR1 model for turtle nesting 
+# original code from Lab 7, Introduction to Bayesian Time-Series
+# analysis using Jags. Univ Washington: 
+# https://www.scribd.com/document/373707632/Lab-7-Fitting-models-with-JAGS-pdf
+
+# Also can be found here:
+# https://nwfsc-timeseries.github.io/atsa-labs/sec-jags-uss.html
+#
+# For this model, the natural log of raw counts were used as data (y). The state model
+# is normal and the observation model is norm. 
+# I used quite informative prior for X[1] ~ dnorm(5, 0.1) although variance of 10 should 
+# be wide enough in the log scale.  I used similar priors for the slopes: dnorm(0, 0.1).
+# For all standard deviations (process and observation), I used uniform between 0 and 20, 
+# which should be wide enough in the log scale. 
+#
+# I didn't see any reason to make the priors flatter because that would make convergence difficult
+# and did not gain anything in return. 
+
+# This model was converted from one for the Indonesia leatherback nesting project.
+# 2020-04-10
+#
+# Provide the following variables in data 
+# n.beaches = the number of beaches (a scalar)
+# n.years = the number of years of observations per beach (a vector)
+# y = observed number of nests/females per year (a matrix of n.beaches x max(n.years))
+
+
+model{
+    # Initial states
+    # all beaches started with very low numbers (similar among them)
+    # I will have just one common N0 value.
+
+    mean.N0 ~ dnorm(0, 0.1)T(0,)
+    sigma.N0 ~ dgamma(2, 0.5)
+    tau.N0 <- 1/(sigma.N0 * sigma.N0)
+    
+    mean.U ~ dnorm(0, 0.1)
+    sigma.U ~ dgamma(2, 0.5)
+    tau.U <- 1/(sigma.U * sigma.U) 
+
+    for(j in 1:n.beaches) {
+        # state 
+        U[j] ~ dnorm(mean.U, tau.U)    
+    
+        N0[j] ~ dnorm(mean.N0, tau.N0)    # prior on init state
+
+        pred.N[j,1] <- N0[j] + U[j]  
+        N[j,1] <- pred.N[j,1]
+        
+        # observation
+        y[j,1] ~  dnorm(N[j,1], tau.R[j])
+                
+        loglik[j,1] <- logdensity.norm(y[j,1], N[j,1], tau.R[j])      
+        sigma.R[j] ~ dgamma(2, 0.5)
+        tau.R[j] <- 1/(sigma.R[j] * sigma.R[j])
+    }
+
+    ####  End of initial states ####  
+
+    for (j in 1:n.beaches){
+        for (s in 2:n.years[j]){
+            # State
+            pred.N[j, s] <- U[j] + N[j, s-1]
+            N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])
+
+            # observation
+            y[j, s] ~  dnorm(N[j, s], tau.R[j])
+                
+            loglik[j, s] <- logdensity.norm(y[j,s], N[j,s], tau.R[j]) 
+        }       
+
+        # Q is the variance of the process (N)
+        sigma.Q[j] ~ dgamma(2, 0.5)
+        tau.Q[j] <- 1/(sigma.Q[j] * sigma.Q[j])                       
+
+    }
+      
+    
+
+    #mu ~ dnorm(0, 0.1)
+    
+}

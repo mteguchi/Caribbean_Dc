@@ -1,3 +1,5 @@
+# state-space model of population growths of multiple groups.
+# Each group gets a unique growth rate and variance. 
 
 model
 {

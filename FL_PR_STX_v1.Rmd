@@ -233,10 +233,15 @@ summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter")
 summary.df %>% filter(Rhat > 1.01)
 ```
 
+<<<<<<< HEAD
 Something is quite wrong... 
 
 ```{r}
 summary.df %>% filter(parameter == "a0[1]")
 ```
+=======
+Indices 47 and 61 are problematic for a0 and a1. Find out what the problems are... 
+
+>>>>>>> 99abdc45ab004b2dbc1d93696caec6306519ae7e
 
 

@@ -66,7 +66,7 @@ for (k in 1:nrow(summary.years)){
 ```
 
 
-Try fitting growth models - we can use the same model as the last paper first. 
+Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. 
 
 ```{r}
 jags.data <- list(n.beaches = nrow(y),
@@ -78,8 +78,19 @@ MCMC.params <- list(n.samples = 100000,
                     n.thin = 5,
                     n.chains = 5)
 
-parameters <- c("U", "mean.U", "sigma.U", 
-                "sigma.Q", "sigma.R", "loglik")
+missing.y <- c()
+
+for (k in 1:length(NA.idx)){
+  if (length(NA.idx[[k]]) > 0){
+    for (k1 in 1:length(NA.idx[[k]])){
+      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx[[k]][k1], "]"))
+    }
+  }
+}
+
+parameters <- c(c("U", "mean.U", "sigma.U", 
+                "sigma.Q", "sigma.R", "loglik"),
+                missing.y)
 
 MCMC.params$model.file = "models/Model_norm_norm_UsQsRs.txt"
 

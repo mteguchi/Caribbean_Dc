@@ -69,8 +69,15 @@ for (k in 1:nrow(summary.years)){
 Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. 
 
 ```{r}
+# testing just three beaches
+# y <- y[27:29,]
+# NA.idx.2 <- vector(mode = "list", length = 3) 
+# NA.idx.2[[1]] <- NA.idx[[27]]
+# NA.idx.2[[2]] <- NA.idx[[28]]
+# NA.idx.2[[3]] <- NA.idx[[29]]
+
 jags.data <- list(n.beaches = nrow(y),
-                  n.years = summary.years$n.years,
+                  n.years = summary.years$n.years[27:29],
                   y = y)
 
 MCMC.params <- list(n.samples = 100000,
@@ -80,16 +87,16 @@ MCMC.params <- list(n.samples = 100000,
 
 missing.y <- c()
 
-for (k in 1:length(NA.idx)){
-  if (length(NA.idx[[k]]) > 0){
-    for (k1 in 1:length(NA.idx[[k]])){
-      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx[[k]][k1], "]"))
+for (k in 1:length(NA.idx.2)){
+  if (length(NA.idx.2[[k]]) > 0){
+    for (k1 in 1:length(NA.idx.2[[k]])){
+      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx.2[[k]][k1], "]"))
     }
   }
 }
 
 parameters <- c(c("U", "mean.U", "sigma.U", 
-                "sigma.Q", "sigma.R", "loglik"),
+                "sigma.Q", "sigma.R", "loglik", "N"),
                 missing.y)
 
 MCMC.params$model.file = "models/Model_norm_norm_UsQsRs.txt"
@@ -132,52 +139,55 @@ For each beach, overlay data and estimated population growth +/- 95% CI.
 
 Plot each beach 
 ```{r}
-p <- 28
+# these are used to plot just 27, 28, 29. (p = 1, ID.2 = 27),
+# (p = 2, ID.2 = 28), (p = 3, ID.2 = 29). They are the same
+# when running all at once. 
+# p <- 3
+# ID.2 <- 29
+
 for (p in 1:length(NA.idx)){
-  ID.1 <- p
-  nest.counts %>% filter(ID == ID.1) -> nest.counts.ID
+  ID.1 <- ID.2 <- p
+  nest.counts %>% filter(ID == ID.2) -> nest.counts.ID
   
   summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
     select(X2.5., X50., X97.5.)-> post.stats.U.ID 
   
-  log.N0 <- log(nest.counts.ID$nests[1] + 1)
-  log.Nt <- log.Nt.low <- log.Nt.high <- vector(mode = "numeric", 
-                                                length = nrow(nest.counts.ID))
-  log.Nt[1] <- log.Nt.low[1] <- log.Nt.high[1] <- log.N0
-  for (k in 2:nrow(nest.counts.ID)){
-    log.Nt[k] <- log.Nt[k-1] + post.stats.U.ID$X50. 
-    log.Nt.low[k] <- log.Nt.low[k-1] + post.stats.U.ID$X2.5. 
-    log.Nt.high[k] <- log.Nt.high[k-1] + post.stats.U.ID$X97.5. 
-  }
-  
+  log.Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
+                            summary.df$parameter, fixed = T),
+                       c("X2.5.", "X50.", "X97.5.")] %>%
+    transmute(Nt.low = X2.5.,
+              Nt = X50.,
+              Nt.high = X97.5.)
   # convert them into anti-log space
   Nt <- exp(log.Nt) - 1
-  Nt.low <- exp(log.Nt.low) - 1
-  Nt.high <- exp(log.Nt.high) - 1
-  nest.counts.ID$Nt <- Nt
-  nest.counts.ID$Nt.low <- Nt.low
-  nest.counts.ID$Nt.high <- Nt.high
+  Nt$year <- seq(min(nest.counts.ID$year), max(nest.counts.ID$year))
+  
+  Nt %>% left_join(nest.counts.ID, by = "year") -> nest.counts.ID.Nt
+  
+  # nest.counts.ID$Nt <- Nt$X50.
+  # nest.counts.ID$Nt.low <- Nt$X2.5.
+  # nest.counts.ID$Nt.high <- Nt$X97.5.
   
   p.1 <- ggplot() + 
-    geom_point(data = nest.counts.ID,
+    geom_point(data = nest.counts.ID.Nt,
                aes(x = year, y = nests),
                color = "black") + 
-    geom_point(data = nest.counts.ID,
+    geom_point(data = nest.counts.ID.Nt,
                aes(x = year, y = Nt),
                color = "gold") + 
-    geom_ribbon(data = nest.counts.ID,
-                aes(x = year, ymin = Nt.low, ymax = Nt.high),
-                fill = "gold", alpha = 0.5) + 
-    labs(title = paste0("ID = ", ID.1)) + 
+    # geom_ribbon(data = nest.counts.ID,
+    #             aes(x = year, ymin = Nt.low, ymax = Nt.high),
+    #             fill = "gold", alpha = 0.5) + 
+    labs(title = paste0("ID = ", ID.2)) + 
     xlab(element_blank()) + 
     ylab("Nests")
   
   # find out missing data
-  if (length(NA.idx[[ID.1]]) > 0){
+  if (length(NA.idx[[ID.2]]) > 0){
     pred.y <- summary.df[grep(paste0("y[", ID.1, ","), 
                               summary.df$parameter, fixed = T),
                          c("X2.5.", "X50.", "X97.5.")]
-    missing.year <- min(year.mat[ID.1]) + NA.idx[[ID.1]] - 1
+    missing.year <- min(year.mat[ID.2]) + NA.idx[[ID.2]] - 1
     pred.y.df <- data.frame(year = missing.year,
                             y.med = max((exp(pred.y$X50.) - 1), 0),
                             y.low = max((exp(pred.y$X2.5.) - 1), 0),

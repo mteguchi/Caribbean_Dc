@@ -49,6 +49,7 @@ nest.counts %>% group_by(ID) %>%
 
 year.mat <- y <- matrix(nrow = nrow(summary.years), 
                         ncol = max(summary.years$n.years))
+NA.idx <- vector(mode = "list", length = nrow(summary.years))
 
 k <- 3
 for (k in 1:nrow(summary.years)){
@@ -57,6 +58,9 @@ for (k in 1:nrow(summary.years)){
     mutate(seq.yr = year - min(year) + 1) -> tmp
   y[k,tmp$seq.yr] <- log(tmp$nests + 1)
   year.mat[k, tmp$seq.yr] <- tmp$year
+  n.years.k <- summary.years$n.years[k]
+  if (sum(is.na(year.mat[k, 1:n.years.k])) > 0)
+    NA.idx[[k]] <- c(1:n.years.k)[is.na(year.mat[k, 1:n.years.k])]
   
 }
 ```
@@ -114,5 +118,8 @@ summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter")
 
 ```
 
+It'd be good to get posteriors on missing observations too. Rather than getting all ys, specify which ones are needed. 
+
+For each beach, overlay data and estimated population growth +/- 95% CI.
 
 

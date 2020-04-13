@@ -38,7 +38,7 @@ nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>%
 
 ```
 
-Time series are different lengths. 
+Time series are different lengths. It'd be good to get posteriors on missing observations too. Rather than getting all ys, specify which ones are needed. 
 
 ```{r}
 # There are some skipped years, which needs to be filled in
@@ -49,6 +49,8 @@ nest.counts %>% group_by(ID) %>%
 
 year.mat <- y <- matrix(nrow = nrow(summary.years), 
                         ncol = max(summary.years$n.years))
+
+# find which data points are missing.
 NA.idx <- vector(mode = "list", length = nrow(summary.years))
 
 k <- 3
@@ -64,7 +66,6 @@ for (k in 1:nrow(summary.years)){
   
 }
 ```
-
 
 Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. 
 
@@ -114,8 +115,8 @@ if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
 
 summary(jm)
 
-mcmc_trace(jm$samples, pars = c("U[1]", "U[2]", "U[3]"))
-#mcmc_dens(jm$samples, pars = c("sigma.U"))
+#mcmc_trace(jm$samples, pars = c("U[1]", "U[2]", "U[3]"))
+mcmc_dens(jm$samples, pars = c("y[8,3]", "y[8,4]", "y[8,5]"))
 # mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
 # mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
 
@@ -128,8 +129,6 @@ summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter")
 
 
 ```
-
-It'd be good to get posteriors on missing observations too. Rather than getting all ys, specify which ones are needed. 
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 

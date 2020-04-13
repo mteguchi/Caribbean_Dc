@@ -42,7 +42,7 @@ model{
         # state 
         U[j] ~ dnorm(mean.U, tau.U)    
     
-        N0[j] ~ dnorm(mean.N0, tau.N0)    # prior on init state
+        N0[j] ~ dnorm(mean.N0, tau.N0)T(0,)    # prior on init state
 
         pred.N[j,1] <- N0[j] + U[j]  
         N[j,1] <- pred.N[j,1]
@@ -61,7 +61,7 @@ model{
         for (s in 2:n.years[j]){
             # State
             pred.N[j, s] <- U[j] + N[j, s-1]
-            N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])
+            N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])T(0,)
 
             # observation
             y[j, s] ~  dnorm(N[j, s], tau.R[j])

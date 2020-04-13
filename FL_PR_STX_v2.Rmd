@@ -63,7 +63,6 @@ for (k in 1:nrow(summary.years)){
   n.years.k <- summary.years$n.years[k]
   if (sum(is.na(year.mat[k, 1:n.years.k])) > 0)
     NA.idx[[k]] <- c(1:n.years.k)[is.na(year.mat[k, 1:n.years.k])]
-  
 }
 ```
 
@@ -116,7 +115,7 @@ if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
 summary(jm)
 
 #mcmc_trace(jm$samples, pars = c("U[1]", "U[2]", "U[3]"))
-mcmc_dens(jm$samples, pars = c("y[8,3]", "y[8,4]", "y[8,5]"))
+#mcmc_dens(jm$samples, pars = c("y[8,3]", "y[8,4]", "y[8,5]"))
 # mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
 # mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
 
@@ -127,9 +126,74 @@ These parameters look good and all Rhat stats are < 1.1.
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
 
-
 ```
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 
+Plot each beach 
+```{r}
+p <- 28
+for (p in 1:length(NA.idx)){
+  ID.1 <- p
+  nest.counts %>% filter(ID == ID.1) -> nest.counts.ID
+  
+  summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
+    select(X2.5., X50., X97.5.)-> post.stats.U.ID 
+  
+  log.N0 <- log(nest.counts.ID$nests[1] + 1)
+  log.Nt <- log.Nt.low <- log.Nt.high <- vector(mode = "numeric", 
+                                                length = nrow(nest.counts.ID))
+  log.Nt[1] <- log.Nt.low[1] <- log.Nt.high[1] <- log.N0
+  for (k in 2:nrow(nest.counts.ID)){
+    log.Nt[k] <- log.Nt[k-1] + post.stats.U.ID$X50. 
+    log.Nt.low[k] <- log.Nt.low[k-1] + post.stats.U.ID$X2.5. 
+    log.Nt.high[k] <- log.Nt.high[k-1] + post.stats.U.ID$X97.5. 
+  }
+  
+  # convert them into anti-log space
+  Nt <- exp(log.Nt) - 1
+  Nt.low <- exp(log.Nt.low) - 1
+  Nt.high <- exp(log.Nt.high) - 1
+  nest.counts.ID$Nt <- Nt
+  nest.counts.ID$Nt.low <- Nt.low
+  nest.counts.ID$Nt.high <- Nt.high
+  
+  p.1 <- ggplot() + 
+    geom_point(data = nest.counts.ID,
+               aes(x = year, y = nests),
+               color = "black") + 
+    geom_point(data = nest.counts.ID,
+               aes(x = year, y = Nt),
+               color = "gold") + 
+    geom_ribbon(data = nest.counts.ID,
+                aes(x = year, ymin = Nt.low, ymax = Nt.high),
+                fill = "gold", alpha = 0.5) + 
+    labs(title = paste0("ID = ", ID.1)) + 
+    xlab(element_blank()) + 
+    ylab("Nests")
+  
+  # find out missing data
+  if (length(NA.idx[[ID.1]]) > 0){
+    pred.y <- summary.df[grep(paste0("y[", ID.1, ","), 
+                              summary.df$parameter, fixed = T),
+                         c("X2.5.", "X50.", "X97.5.")]
+    missing.year <- min(year.mat[ID.1]) + NA.idx[[ID.1]] - 1
+    pred.y.df <- data.frame(year = missing.year,
+                            y.med = max((exp(pred.y$X50.) - 1), 0),
+                            y.low = max((exp(pred.y$X2.5.) - 1), 0),
+                            y.high = (exp(pred.y$X97.5.) - 1))
+    p.1 <- p.1 + 
+      geom_point(data = pred.y.df,
+                 aes(x = year, y = y.med),
+                 color = "green") + 
+      geom_errorbar(data = pred.y.df,
+                    aes(x = year, ymin = y.low, ymax = y.high),
+                    color = "green")
+  }
+  
+  ggsave(p.1, filename = paste0("figures/beach_", p, ".png"),
+         device = "png", dpi = 600)
+}
+
+```
 

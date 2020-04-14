@@ -77,7 +77,7 @@ Try fitting growth models - In this version, we use the state-space approach tha
 # NA.idx.2[[3]] <- NA.idx[[29]]
 
 jags.data <- list(n.beaches = nrow(y),
-                  n.years = summary.years$n.years[27:29],
+                  n.years = summary.years$n.years,
                   y = y)
 
 MCMC.params <- list(n.samples = 100000,
@@ -87,10 +87,10 @@ MCMC.params <- list(n.samples = 100000,
 
 missing.y <- c()
 
-for (k in 1:length(NA.idx.2)){
-  if (length(NA.idx.2[[k]]) > 0){
-    for (k1 in 1:length(NA.idx.2[[k]])){
-      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx.2[[k]][k1], "]"))
+for (k in 1:length(NA.idx)){
+  if (length(NA.idx[[k]]) > 0){
+    for (k1 in 1:length(NA.idx[[k]])){
+      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx[[k]][k1], "]"))
     }
   }
 }

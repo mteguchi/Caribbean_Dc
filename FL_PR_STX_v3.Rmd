@@ -3,7 +3,7 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.2), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review. The model is similar to ones in Boyd et al. (yr?)
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.3), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review and with two population growth rates; one before 2011 and another for since 2011. The model is similar to ones in Boyd et al. (yr?). 
 
 ```{r}
 rm(list=ls())
@@ -66,19 +66,15 @@ for (k in 1:nrow(summary.years)){
 }
 ```
 
-Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. 
+Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. There are only two growth rates in this (v.3) model. 
 
 ```{r}
-# testing just three beaches
-# y <- y[27:29,]
-# NA.idx.2 <- vector(mode = "list", length = 3) 
-# NA.idx.2[[1]] <- NA.idx[[27]]
-# NA.idx.2[[2]] <- NA.idx[[28]]
-# NA.idx.2[[3]] <- NA.idx[[29]]
+years <- ifelse(year.mat < 2011, 1, 2)
 
 jags.data <- list(n.beaches = nrow(y),
                   n.years = summary.years$n.years,
-                  y = y)
+                  y = y,
+                  years = years)
 
 MCMC.params <- list(n.samples = 100000,
                     n.burnin = 50000,
@@ -95,13 +91,14 @@ for (k in 1:length(NA.idx)){
   }
 }
 
-parameters <- c(c("U", "mean.U", "sigma.U", 
-                "sigma.Q", "sigma.R", "loglik", "N"),
+parameters <- c(c("U", "mean.U1", "sigma.U1",
+                  "mean.U2", "sigma.U2",
+                  "sigma.Q", "sigma.R", "loglik", "N"),
                 missing.y)
 
-MCMC.params$model.file = "models/Model_norm_norm_UsQsRs.txt"
+MCMC.params$model.file = "models/Model_norm_norm_QsRs_2Us.txt"
 
-if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
+if (!file.exists("RData/JAGS_out_norm_norm_QsRs_2Us.rds")){
   jm <- jags(data = jags.data,
              #inits = inits,
              parameters.to.save= parameters,
@@ -113,10 +110,10 @@ if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
              DIC = T, 
              parallel=T)
   
-  saveRDS(jm, file = "RData/JAGS_out_norm_norm_UsQsRs.rds")
+  saveRDS(jm, file = "RData/JAGS_out_norm_norm_QsRs_2Us.rds")
   
 } else {
-  jm <- readRDS("RData/JAGS_out_norm_norm_UsQsRs.rds")
+  jm <- readRDS("RData/JAGS_out_norm_norm_QsRs_2Us.rds")
 }
 
 summary(jm)

@@ -136,7 +136,7 @@ summary(jm)
 
 ```
 
-These parameters don't look good and some Rhat stats are > 1.1.  
+These parameters don't look good and some Rhat stats are > 1.1.  Especially for Us... something isn't working right. Probably having just two Us is not sufficient... Have location specific and split in two. 
 
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 

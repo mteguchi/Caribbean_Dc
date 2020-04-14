@@ -70,6 +70,17 @@ Try fitting growth models - In this version, we use the state-space approach tha
 
 ```{r}
 years <- ifelse(year.mat < 2011, 1, 2)
+k <- 3
+for (k in 1:nrow(years)){
+  if (length(NA.idx[[k]]) > 0){
+    years.tmp <- seq(min(year.mat[k,], na.rm = T),
+                     max(year.mat[k,], na.rm = T))
+    for (k1 in 1:length(NA.idx[[k]])){
+      years[k, NA.idx[[k]][k1]] <- ifelse(years.tmp[NA.idx[[k]][k1]] < 2011,
+                                          1, 2)
+    }
+  }
+}
 
 jags.data <- list(n.beaches = nrow(y),
                   n.years = summary.years$n.years,

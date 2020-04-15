@@ -3,7 +3,9 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.3), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review and with two population growth rates; one before 2011 and another for since 2011. The model is similar to ones in Boyd et al. (yr?). 
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.3), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review and with two population growth rates per beach; one before 2011 and another for since 2011. The model is similar to ones in Boyd et al. (yr?). 
+
+First, I tried with just two Us but they never converged. Seems like beach-specific Us are necessary. So, now I have one for before 2011 and another for since 2011 for each beach. It takes a long time to run (about an hour for this Linux laptop). 
 
 ```{r}
 rm(list=ls())
@@ -13,6 +15,7 @@ library(readr)
 library(lubridate)
 library(jagsUI)
 library(bayesplot)
+library(tidybayes)
 ```
 
 Get data;
@@ -150,15 +153,15 @@ Plot each beach
 # these are used to plot just 27, 28, 29. (p = 1, ID.2 = 27),
 # (p = 2, ID.2 = 28), (p = 3, ID.2 = 29). They are the same
 # when running all at once. 
-# p <- 3
+p <- 28
 # ID.2 <- 29
 
 for (p in 1:length(NA.idx)){
   ID.1 <- ID.2 <- p
   nest.counts %>% filter(ID == ID.2) -> nest.counts.ID
   
-  summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
-    select(X2.5., X50., X97.5.)-> post.stats.U.ID 
+  #summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
+  #  select(X2.5., X50., X97.5.)-> post.stats.U.ID 
   
   log.Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
                             summary.df$parameter, fixed = T),
@@ -214,10 +217,20 @@ for (p in 1:length(NA.idx)){
                     aes(x = year, ymin = y.low, ymax = y.high),
                     color = "green")
   }
+
+  # Plot U1 and U2 posteriors for each beach
+  p.2 <- mcmc_dens(jm$samples, 
+                   pars = c(paste0("U[", p, ",1]"), 
+                            paste0("U[", p, ",2]")))
   
-  ggsave(p.1, filename = paste0("figures/beach_", p, "_2Us.png"),
+  # Combine the two plots
+  p.1.2 <- ggpubr::ggarrange(p.1, p.2, nrow = 2)
+  
+  ggsave(p.1.2, filename = paste0("figures/double_Us/beach_", p, "_2Us.png"),
          device = "png", dpi = 600)
 }
 
 ```
+
+
 

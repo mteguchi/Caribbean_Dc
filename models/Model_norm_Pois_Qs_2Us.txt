@@ -1,0 +1,90 @@
+# simple state space AR1 model for turtle nesting 
+# original code from Lab 7, Introduction to Bayesian Time-Series
+# analysis using Jags. Univ Washington: 
+# https://www.scribd.com/document/373707632/Lab-7-Fitting-models-with-JAGS-pdf
+
+# Also can be found here:
+# https://nwfsc-timeseries.github.io/atsa-labs/sec-jags-uss.html
+#
+# For this model, the natural log of raw counts were used as data (y). The state model
+# is normal and the observation model is Poisson. 
+#
+# I didn't see any reason to make the priors flatter because that would make convergence difficult
+# and did not gain anything in return. 
+#
+# In this approach, I use two Us (population grwoth rate); one for up to 2011 and another for 
+# since 2011. It appears that there are decline at some beaches.
+
+# This model was converted from one for the Indonesia leatherback nesting project.
+# 2020-04-10 (original)
+# 2010-04-14 (2Us)
+#
+# Provide the following variables in data 
+# n.beaches = the number of beaches (a scalar)
+# n.years = the number of years of observations per beach (a vector)
+# years = observation years in 1 or 2, where 1 is before the change year and 2 is for since the change year (a matrix of n.beaches x max(n.years)). This needs to match with y below.
+# y = observed number of nests/females per year (a matrix of n.beaches x max(n.years))
+
+
+model{
+    # Initial states
+    # all beaches started with very low numbers (similar among them)
+    # I will have just one common N0 value.
+
+    mean.N0 ~ dnorm(0, 0.1)T(0,)
+    sigma.N0 ~ dgamma(2, 0.5)
+    tau.N0 <- 1/(sigma.N0 * sigma.N0)
+    
+    # one U for before 2011 and another since 2011
+    mean.U1 ~ dnorm(0, 0.1)T(0,)
+    sigma.U1 ~ dgamma(2, 0.5)
+    tau.U1 <- 1/(sigma.U1 * sigma.U1) 
+
+    # for since 2011
+    mean.U2 ~ dnorm(0, 0.1)T(0,)
+    sigma.U2 ~ dgamma(2, 0.5)
+    tau.U2 <- 1/(sigma.U2 * sigma.U2) 
+
+    # Initial state
+    for(j in 1:n.beaches) {
+        U[j,1] ~ dnorm(mean.U1, tau.U1)
+        U[j,2] ~ dnorm(mean.U2, tau.U2)
+
+        # state     
+        N0[j] ~ dnorm(mean.N0, tau.N0)T(0,)    # prior on init state
+
+        pred.N[j,1] <- N0[j] * U[j, years[j,1]]  
+        N[j,1] <- pred.N[j,1]
+        
+        # observation
+        y[j,1] ~  dpois(N[j,1])
+                
+        loglik[j,1] <- logdensity.pois(y[j,1], N[j,1])      
+        
+    }
+
+    ####  End of initial states ####  
+
+    for (j in 1:n.beaches){
+        for (s in 2:n.years[j]){
+            # State
+            pred.N[j, s] <- U[j, years[j,s]] * N[j, s-1]
+            N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])T(0,)
+
+            # observation
+            y[j, s] ~  dpois(N[j, s])
+                
+            loglik[j, s] <- logdensity.pois(y[j,s], N[j,s]) 
+        }       
+
+        # Q is the variance of the process (N)
+        sigma.Q[j] ~ dgamma(2, 0.5)
+        tau.Q[j] <- 1/(sigma.Q[j] * sigma.Q[j])                       
+
+    }
+      
+    
+
+    #mu ~ dnorm(0, 0.1)
+    
+}

@@ -3,7 +3,11 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.2), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review. The model is similar to ones in Boyd et al. (yr?)
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.3), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review and with two population growth rates per beach; one before 2011 and another for since 2011. The model is similar to ones in Boyd et al. (yr?). 
+
+First, I tried with just two Us but they never converged. Seems like beach-specific Us are necessary. So, now I have one for before 2011 and another for since 2011 for each beach. It takes a long time to run (about an hour for this Linux laptop). 
+
+This version (v.4) uses Poisson observation model.
 
 ```{r}
 rm(list=ls())
@@ -13,6 +17,7 @@ library(readr)
 library(lubridate)
 library(jagsUI)
 library(bayesplot)
+library(tidybayes)
 ```
 
 Get data;
@@ -58,7 +63,7 @@ for (k in 1:nrow(summary.years)){
   nest.counts %>% filter(ID == summary.years$ID[k]) %>%
     select(year, nests) %>% 
     mutate(seq.yr = year - min(year) + 1) -> tmp
-  y[k,tmp$seq.yr] <- log(tmp$nests + 1)
+  y[k,tmp$seq.yr] <- tmp$nests
   year.mat[k, tmp$seq.yr] <- tmp$year
   n.years.k <- summary.years$n.years[k]
   if (sum(is.na(year.mat[k, 1:n.years.k])) > 0)
@@ -66,19 +71,26 @@ for (k in 1:nrow(summary.years)){
 }
 ```
 
-Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. 
+Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. There are only two growth rates in this (v.3) model. 
 
 ```{r}
-# testing just three beaches
-# y <- y[27:29,]
-# NA.idx.2 <- vector(mode = "list", length = 3) 
-# NA.idx.2[[1]] <- NA.idx[[27]]
-# NA.idx.2[[2]] <- NA.idx[[28]]
-# NA.idx.2[[3]] <- NA.idx[[29]]
+years <- ifelse(year.mat < 2011, 1, 2)
+k <- 3
+for (k in 1:nrow(years)){
+  if (length(NA.idx[[k]]) > 0){
+    years.tmp <- seq(min(year.mat[k,], na.rm = T),
+                     max(year.mat[k,], na.rm = T))
+    for (k1 in 1:length(NA.idx[[k]])){
+      years[k, NA.idx[[k]][k1]] <- ifelse(years.tmp[NA.idx[[k]][k1]] < 2011,
+                                          1, 2)
+    }
+  }
+}
 
 jags.data <- list(n.beaches = nrow(y),
                   n.years = summary.years$n.years,
-                  y = y)
+                  y = y,
+                  years = years)
 
 MCMC.params <- list(n.samples = 100000,
                     n.burnin = 50000,
@@ -95,13 +107,14 @@ for (k in 1:length(NA.idx)){
   }
 }
 
-parameters <- c(c("U", "mean.U", "sigma.U", 
-                "sigma.Q", "sigma.R", "loglik", "N"),
+parameters <- c(c("U", "mean.U1", "sigma.U1",
+                  "mean.U2", "sigma.U2",
+                  "sigma.Q",  "loglik", "N"),
                 missing.y)
 
-MCMC.params$model.file = "models/Model_norm_norm_UsQsRs.txt"
+MCMC.params$model.file = "models/Model_norm_Pois_Qs_2Us.txt"
 
-if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
+if (!file.exists("RData/JAGS_out_norm_Pois_Qs_2Us.rds")){
   jm <- jags(data = jags.data,
              #inits = inits,
              parameters.to.save= parameters,
@@ -113,10 +126,10 @@ if (!file.exists("RData/JAGS_out_norm_norm_UsQsRs.rds")){
              DIC = T, 
              parallel=T)
   
-  saveRDS(jm, file = "RData/JAGS_out_norm_norm_UsQsRs.rds")
+  saveRDS(jm, file = "RData/JAGS_out_norm_Pois_Qs_2Us.rds")
   
 } else {
-  jm <- readRDS("RData/JAGS_out_norm_norm_UsQsRs.rds")
+  jm <- readRDS("RData/JAGS_out_norm_Pois_Qs_2Us.rds")
 }
 
 summary(jm)
@@ -128,12 +141,36 @@ summary(jm)
 
 ```
 
-These parameters look good and but not all Rhat stats are < 1.1.  
+These parameters don't look good and some Rhat stats are > 1.1.  Especially for Us... something isn't working right. Probably having just two Us is not sufficient... Have location specific and split in two. 
 
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
-
+summary.df %>% filter(Rhat > 1.1)
 ```
+
+
+U1 for beaches 42, 50, 72, and 73 didn't converge well (small sample sizes?). Also, sigma.U1 and sigma.Q[42] didn't converge. Look at the data for beach 42:
+
+```{r}
+nest.counts %>% filter(ID == 42) -> nest.counts.42
+ggplot(data = nest.counts.42) + 
+ geom_line(aes(x = year, y = nests)) + 
+  geom_point(aes(x = year, y = nests))
+```
+
+This explains the difficulty in fitting anything! 
+
+How about the others?
+
+```{r}
+nest.counts %>% filter(ID == 50 | ID == 72 | ID == 73) %>%
+  group_by(as.factor(ID)) -> nest.counts.50.72.73
+ggplot(data = nest.counts.50.72.73) + 
+ geom_line(aes(x = year, y = nests, color = as.factor(ID))) + 
+  geom_point(aes(x = year, y = nests, color = as.factor(ID)))
+```
+
+This kinda explains the difficulty in finding two Us.
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 
@@ -142,15 +179,15 @@ Plot each beach
 # these are used to plot just 27, 28, 29. (p = 1, ID.2 = 27),
 # (p = 2, ID.2 = 28), (p = 3, ID.2 = 29). They are the same
 # when running all at once. 
-# p <- 3
-# ID.2 <- 29
 p <- 28
+# ID.2 <- 29
+
 for (p in 1:length(NA.idx)){
   ID.1 <- ID.2 <- p
   nest.counts %>% filter(ID == ID.2) -> nest.counts.ID
   
-  # summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
-  #   select(X2.5., X50., X97.5.)-> post.stats.U.ID 
+  #summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
+  #  select(X2.5., X50., X97.5.)-> post.stats.U.ID 
   
   log.Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
                             summary.df$parameter, fixed = T),
@@ -207,15 +244,20 @@ for (p in 1:length(NA.idx)){
                     color = "green")
   }
 
-  # Plot U posteriors for each beach
+  # Plot U1 and U2 posteriors for each beach
   p.2 <- mcmc_dens(jm$samples, 
-                   pars = c(paste0("U[", p, "]")))
+                   pars = c(paste0("U[", p, ",1]"), 
+                            paste0("U[", p, ",2]")))
   
   # Combine the two plots
   p.1.2 <- ggpubr::ggarrange(p.1, p.2, nrow = 2)
-  ggsave(p.1.2, filename = paste0("figures/single_U/beach_", p, ".png"),
+  
+  ggsave(p.1.2, filename = paste0("figures/double_Us/beach_", 
+                                  p, "norm_Pois_2Us.png"),
          device = "png", dpi = 600)
 }
 
 ```
+
+
 

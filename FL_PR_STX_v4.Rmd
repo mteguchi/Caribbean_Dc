@@ -145,32 +145,9 @@ These parameters don't look good and some Rhat stats are > 1.1.  Especially for 
 
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
-summary.df %>% filter(Rhat > 1.1)
+#summary.df %>% filter(Rhat > 1.1)
 ```
 
-
-U1 for beaches 42, 50, 72, and 73 didn't converge well (small sample sizes?). Also, sigma.U1 and sigma.Q[42] didn't converge. Look at the data for beach 42:
-
-```{r}
-nest.counts %>% filter(ID == 42) -> nest.counts.42
-ggplot(data = nest.counts.42) + 
- geom_line(aes(x = year, y = nests)) + 
-  geom_point(aes(x = year, y = nests))
-```
-
-This explains the difficulty in fitting anything! 
-
-How about the others?
-
-```{r}
-nest.counts %>% filter(ID == 50 | ID == 72 | ID == 73) %>%
-  group_by(as.factor(ID)) -> nest.counts.50.72.73
-ggplot(data = nest.counts.50.72.73) + 
- geom_line(aes(x = year, y = nests, color = as.factor(ID))) + 
-  geom_point(aes(x = year, y = nests, color = as.factor(ID)))
-```
-
-This kinda explains the difficulty in finding two Us.
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 
@@ -189,14 +166,14 @@ for (p in 1:length(NA.idx)){
   #summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
   #  select(X2.5., X50., X97.5.)-> post.stats.U.ID 
   
-  log.Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
+  Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
                             summary.df$parameter, fixed = T),
                        c("X2.5.", "X50.", "X97.5.")] %>%
     transmute(Nt.low = X2.5.,
               Nt = X50.,
               Nt.high = X97.5.)
   # convert them into anti-log space
-  Nt <- exp(log.Nt) - 1
+  #Nt <- exp(log.Nt) - 1
   Nt$year <- seq(min(nest.counts.ID$year), max(nest.counts.ID$year))
   
   Nt %>% left_join(nest.counts.ID, by = "year") -> nest.counts.ID.Nt
@@ -232,9 +209,9 @@ for (p in 1:length(NA.idx)){
                          c("X2.5.", "X50.", "X97.5.")]
     missing.year <- min(year.mat[ID.2]) + NA.idx[[ID.2]] - 1
     pred.y.df <- data.frame(year = missing.year,
-                            y.med = max((exp(pred.y$X50.) - 1), 0),
-                            y.low = max((exp(pred.y$X2.5.) - 1), 0),
-                            y.high = (exp(pred.y$X97.5.) - 1))
+                            y.med = pred.y$X50.,
+                            y.low = pred.y$X2.5.,
+                            y.high = pred.y$X97.5.)
     p.1 <- p.1 + 
       geom_point(data = pred.y.df,
                  aes(x = year, y = y.med),
@@ -254,7 +231,8 @@ for (p in 1:length(NA.idx)){
   
   ggsave(p.1.2, filename = paste0("figures/double_Us/beach_", 
                                   p, "norm_Pois_2Us.png"),
-         device = "png", dpi = 600)
+         device = "png", dpi = 600,
+         height = 7, width = 7, units = "in")
 }
 
 ```

@@ -113,6 +113,7 @@ for (k in 1:length(NA.idx)){
 
 parameters <- c(c("U", "mean.U1", "sigma.U1",
                   "mean.U2", "sigma.U2",
+                  "b0.U1", "b1.U1", "b0.U2", "b1.U2",
                   "sigma.Q",  "loglik", "N"),
                 missing.y)
 
@@ -145,13 +146,18 @@ summary(jm)
 
 ```
 
-These parameters don't look good and some Rhat stats are > 1.1.  Especially for Us... something isn't working right. Probably having just two Us is not sufficient... Have location specific and split in two. 
+These parameters look okay; Rhat stats are < 1.1.   
 
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
 #summary.df %>% filter(Rhat > 1.1)
 ```
 
+Look at the linear model parameters for U:
+
+```{r}
+mcmc_dens(jm$samples, pars = c("b0.U1", "b1.U1"))
+```
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 
@@ -160,7 +166,7 @@ Plot each beach
 # these are used to plot just 27, 28, 29. (p = 1, ID.2 = 27),
 # (p = 2, ID.2 = 28), (p = 3, ID.2 = 29). They are the same
 # when running all at once. 
-p <- 28
+p <- 38
 # ID.2 <- 29
 
 for (p in 1:length(NA.idx)){

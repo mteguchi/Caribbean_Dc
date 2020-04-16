@@ -41,21 +41,20 @@ model{
     
     b0.U2 ~ dnorm(0, 0.1)
     b1.U2 ~ dnorm(0, 0.1)
+
+    sigma.U1 ~ dgamma(2, 0.5)
+    tau.U1 <- 1/(sigma.U1 * sigma.U1) 
+
+    sigma.U2 ~ dgamma(2, 0.5)
+    tau.U2 <- 1/(sigma.U2 * sigma.U2) 
     
     # Initial state
     for(j in 1:n.beaches) {
         # one U for before 2011 and another since 2011
-        log(mean.U1) <- b0.U1 + b1.U1 * lat[j] 
-        sigma.U1 ~ dgamma(2, 0.5)
-        tau.U1 <- 1/(sigma.U1 * sigma.U1) 
+        log(U[j,1]) <- b0.U1 + b1.U1 * lat[j] 
 
         # for since 2011
-        log(mean.U2) <- b0.U2 + b1.U2 * lat[j] 
-        sigma.U2 ~ dgamma(2, 0.5)
-        tau.U2 <- 1/(sigma.U2 * sigma.U2) 
-
-        U[j,1] ~ dnorm(mean.U1, tau.U1)
-        U[j,2] ~ dnorm(mean.U2, tau.U2)
+        log(U[j,2]) <- b0.U2 + b1.U2 * lat[j] 
 
         # state     
         N0[j] ~ dnorm(mean.N0, tau.N0)T(0,)    # prior on init state

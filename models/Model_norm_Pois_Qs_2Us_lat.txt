@@ -36,6 +36,12 @@ model{
     sigma.N0 ~ dgamma(2, 0.5)
     tau.N0 <- 1/(sigma.N0 * sigma.N0)
     
+    b0.U1 ~ dnorm(0, 0.1)
+    b1.U1 ~ dnorm(0, 0.1)
+    
+    b0.U2 ~ dnorm(0, 0.1)
+    b1.U2 ~ dnorm(0, 0.1)
+    
     # Initial state
     for(j in 1:n.beaches) {
         # one U for before 2011 and another since 2011

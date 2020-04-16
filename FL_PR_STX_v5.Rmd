@@ -1,0 +1,246 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart. IN this version (v.3), I use a state-space model that we used for loggerheads/leatherbacks for HI shallow-set longline biological review and with two population growth rates per beach; one before 2011 and another for since 2011. The model is similar to ones in Boyd et al. (yr?). 
+
+First, I tried with just two Us but they never converged. Seems like beach-specific Us are necessary. So, now I have one for before 2011 and another for since 2011 for each beach. It takes a long time to run (about an hour for this Linux laptop). 
+
+This version (v.4) uses Poisson observation model.
+
+In this version (v.5), the growth rate parameters are treated as a linear function of latitude. 
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+library(tidybayes)
+```
+
+Get data;
+
+```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>% 
+  mutate(lat_band = ifelse(latitude < 26, 25,
+                           ifelse(latitude < 27, 26,
+                                  ifelse(latitude < 28, 27,
+                                         ifelse(latitude < 29, 28,
+                                                ifelse(latitude < 30, 29,
+                                                       ifelse(latitude < 31, 30)))))),
+         beach_f = as.factor(toupper(beach)))
+
+```
+
+Time series are different lengths. It'd be good to get posteriors on missing observations too. Rather than getting all ys, specify which ones are needed. 
+
+```{r}
+# There are some skipped years, which needs to be filled in
+nest.counts %>% group_by(ID) %>%
+  summarise(n.years = max(year) - min(year) + 1,
+            year.1 = min(year),
+            year.2 = max(year),
+            lat = first(latitude)) -> summary.years
+
+year.mat <- y <- matrix(nrow = nrow(summary.years), 
+                        ncol = max(summary.years$n.years))
+
+# find which data points are missing.
+NA.idx <- vector(mode = "list", length = nrow(summary.years))
+
+k <- 3
+for (k in 1:nrow(summary.years)){
+  nest.counts %>% filter(ID == summary.years$ID[k]) %>%
+    select(year, nests) %>% 
+    mutate(seq.yr = year - min(year) + 1) -> tmp
+  y[k,tmp$seq.yr] <- tmp$nests
+  year.mat[k, tmp$seq.yr] <- tmp$year
+  n.years.k <- summary.years$n.years[k]
+  if (sum(is.na(year.mat[k, 1:n.years.k])) > 0)
+    NA.idx[[k]] <- c(1:n.years.k)[is.na(year.mat[k, 1:n.years.k])]
+}
+```
+
+Try fitting growth models - In this version, we use the state-space approach that is the same as one from HI SSLL BiOp. We look at the predicted missing values also. There are only two growth rates in this (v.3) model. 
+
+```{r}
+years <- ifelse(year.mat < 2011, 1, 2)
+k <- 3
+for (k in 1:nrow(years)){
+  if (length(NA.idx[[k]]) > 0){
+    years.tmp <- seq(min(year.mat[k,], na.rm = T),
+                     max(year.mat[k,], na.rm = T))
+    for (k1 in 1:length(NA.idx[[k]])){
+      years[k, NA.idx[[k]][k1]] <- ifelse(years.tmp[NA.idx[[k]][k1]] < 2011,
+                                          1, 2)
+    }
+  }
+}
+
+jags.data <- list(n.beaches = nrow(y),
+                  n.years = summary.years$n.years,
+                  y = y,
+                  years = years,
+                  lat = summary.years$lat - mean(summary.years$lat))
+
+MCMC.params <- list(n.samples = 100000,
+                    n.burnin = 50000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+missing.y <- c()
+
+for (k in 1:length(NA.idx)){
+  if (length(NA.idx[[k]]) > 0){
+    for (k1 in 1:length(NA.idx[[k]])){
+      missing.y <- c(missing.y, paste0("y[", k, ",", NA.idx[[k]][k1], "]"))
+    }
+  }
+}
+
+parameters <- c(c("U", "mean.U1", "sigma.U1",
+                  "mean.U2", "sigma.U2",
+                  "sigma.Q",  "loglik", "N"),
+                missing.y)
+
+MCMC.params$model.file = "models/Model_norm_Pois_Qs_2Us_lat.txt"
+
+if (!file.exists("RData/JAGS_out_norm_Pois_Qs_2Us_lat.rds")){
+  jm <- jags(data = jags.data,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+  
+  saveRDS(jm, file = "RData/JAGS_out_norm_Pois_Qs_2Us_lat.rds")
+  
+} else {
+  jm <- readRDS("RData/JAGS_out_norm_Pois_Qs_2Us_lat.rds")
+}
+
+summary(jm)
+
+#mcmc_trace(jm$samples, pars = c("U[1]", "U[2]", "U[3]"))
+#mcmc_dens(jm$samples, pars = c("y[8,3]", "y[8,4]", "y[8,5]"))
+# mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
+# mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
+
+```
+
+These parameters don't look good and some Rhat stats are > 1.1.  Especially for Us... something isn't working right. Probably having just two Us is not sufficient... Have location specific and split in two. 
+
+```{r}
+summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
+#summary.df %>% filter(Rhat > 1.1)
+```
+
+
+For each beach, overlay data and estimated population growth +/- 95% CI.
+
+Plot each beach 
+```{r}
+# these are used to plot just 27, 28, 29. (p = 1, ID.2 = 27),
+# (p = 2, ID.2 = 28), (p = 3, ID.2 = 29). They are the same
+# when running all at once. 
+p <- 28
+# ID.2 <- 29
+
+for (p in 1:length(NA.idx)){
+  ID.1 <- ID.2 <- p
+  nest.counts %>% filter(ID == ID.2) -> nest.counts.ID
+  
+  #summary.df %>% filter(parameter == paste0("U[", ID.1, "]")) %>%
+  #  select(X2.5., X50., X97.5.)-> post.stats.U.ID 
+  
+  Nt <- summary.df[grep(paste0("N[", ID.1, ","), 
+                            summary.df$parameter, fixed = T),
+                       c("X2.5.", "X50.", "X97.5.")] %>%
+    transmute(Nt.low = X2.5.,
+              Nt = X50.,
+              Nt.high = X97.5.)
+  # convert them into anti-log space
+  #Nt <- exp(log.Nt) - 1
+  Nt$year <- seq(min(nest.counts.ID$year), max(nest.counts.ID$year))
+  
+  Nt %>% left_join(nest.counts.ID, by = "year") -> nest.counts.ID.Nt
+  
+  # nest.counts.ID$Nt <- Nt$X50.
+  # nest.counts.ID$Nt.low <- Nt$X2.5.
+  # nest.counts.ID$Nt.high <- Nt$X97.5.
+  
+  p.1 <- ggplot() + 
+    geom_point(data = nest.counts.ID.Nt,
+               aes(x = year, y = nests),
+               color = "black") + 
+    geom_point(data = nest.counts.ID.Nt,
+               aes(x = year, y = Nt),
+               color = "darkorange",
+              alpha = 0.5) +     
+    geom_path(data = nest.counts.ID.Nt,
+               aes(x = year, y = Nt),
+               color = "darkorange",
+              alpha = 0.5) + 
+    geom_ribbon(data = nest.counts.ID.Nt,
+                aes(x = year, ymin = Nt.low, 
+                    ymax = Nt.high),
+                fill = "gold", alpha = 0.3) +
+    labs(title = paste0("ID = ", ID.2)) + 
+    xlab(element_blank()) + 
+    ylab("Nests")
+  
+  # find out missing data
+  if (length(NA.idx[[ID.2]]) > 0){
+    pred.y <- summary.df[grep(paste0("y[", ID.1, ","), 
+                              summary.df$parameter, fixed = T),
+                         c("X2.5.", "X50.", "X97.5.")]
+    missing.year <- min(year.mat[ID.2]) + NA.idx[[ID.2]] - 1
+    pred.y.df <- data.frame(year = missing.year,
+                            y.med = pred.y$X50.,
+                            y.low = pred.y$X2.5.,
+                            y.high = pred.y$X97.5.)
+    p.1 <- p.1 + 
+      geom_point(data = pred.y.df,
+                 aes(x = year, y = y.med),
+                 color = "green") + 
+      geom_errorbar(data = pred.y.df,
+                    aes(x = year, ymin = y.low, ymax = y.high),
+                    color = "green")
+  }
+
+  # Plot U1 and U2 posteriors for each beach
+  p.2 <- mcmc_dens(jm$samples, 
+                   pars = c(paste0("U[", p, ",1]"), 
+                            paste0("U[", p, ",2]")))
+  
+  # Combine the two plots
+  p.1.2 <- ggpubr::ggarrange(p.1, p.2, nrow = 2)
+  
+  ggsave(p.1.2, 
+         filename = paste0("figures/double_Us/beach_", 
+                           p, "_norm_Pois_2Us_lat.png"),
+         device = "png", dpi = 600,
+         height = 7, width = 7, units = "in")
+}
+
+```
+
+
+

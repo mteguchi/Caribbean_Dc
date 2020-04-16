@@ -231,7 +231,7 @@ for (p in 1:length(NA.idx)){
   
   ggsave(p.1.2, 
          filename = paste0("figures/double_Us/beach_", 
-                           p, "norm_Pois_2Us.png"),
+                           p, "_norm_Pois_2Us.png"),
          device = "png", dpi = 600,
          height = 7, width = 7, units = "in")
 }

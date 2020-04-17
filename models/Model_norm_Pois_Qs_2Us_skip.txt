@@ -61,12 +61,12 @@ model{
         N[j,1] <- pred.N[j,1]
         
         # available for nesting
-        M[j,1] ~ dbin(N[j,1], p)
+        #M[j,1] ~ dbin(p, N[j,1])
         
         # observation
-        y[j,1] ~  dpois(M[j,1])
+        y[j,1] ~  dpois(p * N[j,1])
                 
-        loglik[j,1] <- logdensity.pois(y[j,1], M[j,1])      
+        loglik[j,1] <- logdensity.pois(y[j,1], p * N[j,1])      
         
     }
 
@@ -79,12 +79,12 @@ model{
             N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])T(0,)
 
             # available for nesting
-            M[j,s] ~ dbin(N[j,s], p)
+            #M[j,s] ~ dbin(p, round(N[j,s]))
 
             # observation
-            y[j, s] ~  dpois(M[j, s])
+            y[j, s] ~  dpois(p * N[j, s])
                 
-            loglik[j, s] <- logdensity.pois(y[j,s], M[j,s]) 
+            loglik[j, s] <- logdensity.pois(y[j,s], p * N[j,s]) 
         }       
 
         # Q is the variance of the process (N)

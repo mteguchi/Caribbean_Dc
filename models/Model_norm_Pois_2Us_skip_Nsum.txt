@@ -1,0 +1,96 @@
+# simple state space AR1 model for turtle nesting 
+# original code from Lab 7, Introduction to Bayesian Time-Series
+# analysis using Jags. Univ Washington: 
+# https://www.scribd.com/document/373707632/Lab-7-Fitting-models-with-JAGS-pdf
+
+# Also can be found here:
+# https://nwfsc-timeseries.github.io/atsa-labs/sec-jags-uss.html
+#
+# For this model, the raw counts were used as data (y). The state model
+# is normal and the observation model is Poisson. I added skip nesting
+# in this model by having a proportion of Nt available for sampling. In this 
+# one, I allocate the total N to as many as the observed beaches (74). 
+# So, there is a total U, that operates at the population level, using the 
+# sum of all. Beach-specific growth rates also are computed from observed y.
+#
+# I didn't see any reason to make the priors flatter because that would make convergence difficult
+# and did not gain anything in return. 
+#
+# In this approach, I use two Us (population grwoth rate); one for up to 2011 and another for 
+# since 2011. It appears that there are decline at some beaches.
+
+# This model was converted from one for the Indonesia leatherback nesting project.
+# 2020-04-10 (original)
+# 2020-04-14 (2Us)
+# 2020-04-16 (skip nesting)
+# 2020-04-06 (Using the sum of all beaches for one U)
+#
+# Provide the following variables in data 
+# n.beaches = the number of beaches (a scalar)
+# n.years = the total number of years of observations (a scalar)
+# years = observation years in 1 or 2, where 1 is before the change year and 2 is for since the change year (a matrix of n.beaches x max(n.years)). This needs to match with y below.
+# y = observed number of nests/females per year. NA in years where there was no observation (a matrix of n.beaches x max(n.years))
+
+
+model{
+    # Initial states
+    # all beaches started with very low numbers (similar among them)
+    # I will have just one common N0 value.
+
+    mean.N0 ~ dnorm(0, 0.1)T(0,)
+    sigma.N0 ~ dgamma(2, 0.5)
+    tau.N0 <- 1/(sigma.N0 * sigma.N0)
+    
+    # one U for before 2011 and another since 2011
+    mean.U1 ~ dnorm(0, 0.1)T(0,)
+    sigma.U1 ~ dgamma(2, 0.5)
+    tau.U1 <- 1/(sigma.U1 * sigma.U1) 
+
+    # for since 2011
+    mean.U2 ~ dnorm(0, 0.1)T(0,)
+    sigma.U2 ~ dgamma(2, 0.5)
+    tau.U2 <- 1/(sigma.U2 * sigma.U2) 
+    
+    # the proportion nesting per year
+    p ~ dbeta(1, 1)
+
+    # proportions nest at each beach
+    for (k in 1:n.beaches){
+      alpha[k] <- 1
+    }
+    r ~ ddirch(alpha[1:n.beaches])
+    
+    U[1] ~ dnorm(mean.U1, tau.U1)
+    U[2] ~ dnorm(mean.U2, tau.U2)
+    
+    # Initial state
+    N0[1] ~ dnorm(mean.N0, tau.N0)T(0,)
+    
+    for(j in 1:n.beaches) {
+        # state     
+        N[j,1] <- N0[1] * r[j] 
+        
+        # observation
+        y[j,1] ~  dpois(p * N[j,1])
+                
+        loglik[j,1] <- logdensity.pois(y[j,1], p * N[j,1])      
+        
+    }
+
+    ####  End of initial states ####  
+    for (s in 2:n.years){
+        N0[s] <- U[years[j]] * N0[s-1]
+        for (j in 1:n.beaches){
+            # State
+            N[j,s] <- N0[s] * r[j]
+            U.beach[j,s] <- N[j, s]/N[j,s-1]
+
+            # observation
+            y[j, s] ~  dpois(p * N[j, s])
+                
+            loglik[j, s] <- logdensity.pois(y[j,s], p * N[j,s]) 
+        }       
+
+    }
+      
+}

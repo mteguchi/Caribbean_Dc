@@ -48,14 +48,14 @@ model{
     sigma.U2 ~ dgamma(2, 0.5)
     tau.U2 <- 1/(sigma.U2 * sigma.U2) 
     
-    # high and low years
-    p[1] ~ dbeta(1, 1)
-    p[2] ~ dbeta(1, 1)
-    
     # Initial state
     for(j in 1:n.beaches) {
         U[j,1] ~ dnorm(mean.U1, tau.U1)
         U[j,2] ~ dnorm(mean.U2, tau.U2)
+        
+        # high and low years
+        p[j,1] ~ dbeta(1, 1)
+        p[j,2] ~ dbeta(1, 1)
 
         # state     
         N0[j] ~ dnorm(mean.N0, tau.N0)T(0,)    # prior on init state
@@ -64,9 +64,9 @@ model{
         N[j,1] <- pred.N[j,1]
         
         # observation
-        y[j,1] ~  dpois(p[high.low[j,1]] * N[j,1])
+        y[j,1] ~  dpois(p[j, high.low[j,1]] * N[j,1])
                 
-        loglik[j,1] <- logdensity.pois(y[j,1], p[high.low[j,1]] * N[j,1])      
+        loglik[j,1] <- logdensity.pois(y[j,1], p[j,high.low[j,1]] * N[j,1])      
         
     }
 
@@ -79,9 +79,9 @@ model{
             N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])T(0,)
 
             # observation
-            y[j, s] ~  dpois(p[high.low[j,s]] * N[j, s])
+            y[j, s] ~  dpois(p[j, high.low[j,s]] * N[j, s])
                 
-            loglik[j, s] <- logdensity.pois(y[j,s], p[high.low[j,s]] * N[j,s]) 
+            loglik[j, s] <- logdensity.pois(y[j,s], p[j, high.low[j,s]] * N[j,s]) 
         }       
 
         # Q is the variance of the process (N)

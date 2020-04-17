@@ -79,8 +79,10 @@ model{
 
     ####  End of initial states ####  
     for (s in 2:n.years){
-        N0[s] <- U[years[j]] * N0[s-1]
+        N0[s] <- U[years[s]] * N0[s-1]
+
         for (j in 1:n.beaches){
+        
             # State
             N[j,s] <- N0[s] * r[j]
             U.beach[j,s] <- N[j, s]/N[j,s-1]

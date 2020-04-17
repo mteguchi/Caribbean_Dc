@@ -26,6 +26,7 @@
 # n.years = the number of years of observations per beach (a vector)
 # years = observation years in 1 or 2, where 1 is before the change year and 2 is for since the change year (a matrix of n.beaches x max(n.years)). This needs to match with y below.
 # y = observed number of nests/females per year (a matrix of n.beaches x max(n.years))
+# high.low = high/low years in 1 or 2. It is a matrix of n.beaches x max(n.years), where 1 and 2 alternate from the first year to the end. This parameter is trying to incorporate high/low cyclical nature of observed nesting.
 
 
 model{
@@ -46,8 +47,10 @@ model{
     mean.U2 ~ dnorm(0, 0.1)T(0,)
     sigma.U2 ~ dgamma(2, 0.5)
     tau.U2 <- 1/(sigma.U2 * sigma.U2) 
-
-    p ~ dbeta(1, 1)
+    
+    # high and low years
+    p[1] ~ dbeta(1, 1)
+    p[2] ~ dbeta(1, 1)
     
     # Initial state
     for(j in 1:n.beaches) {
@@ -60,13 +63,10 @@ model{
         pred.N[j,1] <- N0[j] * U[j, years[j,1]]  
         N[j,1] <- pred.N[j,1]
         
-        # available for nesting
-        #M[j,1] ~ dbin(p, N[j,1])
-        
         # observation
-        y[j,1] ~  dpois(p * N[j,1])
+        y[j,1] ~  dpois(p[high.low[j,1]] * N[j,1])
                 
-        loglik[j,1] <- logdensity.pois(y[j,1], p * N[j,1])      
+        loglik[j,1] <- logdensity.pois(y[j,1], p[high.low[j,1]] * N[j,1])      
         
     }
 
@@ -78,13 +78,10 @@ model{
             pred.N[j, s] <- U[j, years[j,s]] * N[j, s-1]
             N[j, s] ~ dnorm(pred.N[j,s], tau.Q[j])T(0,)
 
-            # available for nesting
-            #M[j,s] ~ dbin(p, round(N[j,s]))
-
             # observation
-            y[j, s] ~  dpois(p * N[j, s])
+            y[j, s] ~  dpois(p[high.low[j,s]] * N[j, s])
                 
-            loglik[j, s] <- logdensity.pois(y[j,s], p * N[j,s]) 
+            loglik[j, s] <- logdensity.pois(y[j,s], p[high.low[j,s]] * N[j,s]) 
         }       
 
         # Q is the variance of the process (N)

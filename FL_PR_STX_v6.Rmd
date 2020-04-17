@@ -80,6 +80,17 @@ Try fitting growth models - In this version, we use the state-space approach tha
 
 ```{r}
 years <- ifelse(year.mat < 2011, 1, 2)
+high.low <- matrix(nrow = nrow(years), ncol = ncol(years))
+
+#k <- 1 k1 <- 2
+# Even years are 1s and odd years are 2s
+for (k in 1:nrow(high.low)){
+  high.low[k, 1] <- ifelse(year.mat[k, 1] %% 2 == 0, 1, 2)
+  for (k1 in 2:ncol(high.low)){
+    high.low[k, k1] <- ifelse(high.low[k, (k1-1)] %% 2 == 0, 1, 2)
+  }
+}
+
 k <- 3
 for (k in 1:nrow(years)){
   if (length(NA.idx[[k]]) > 0){
@@ -95,7 +106,8 @@ for (k in 1:nrow(years)){
 jags.data <- list(n.beaches = nrow(y),
                   n.years = summary.years$n.years,
                   y = y,
-                  years = years)
+                  years = years,
+                  high.low = high.low)
 
 MCMC.params <- list(n.samples = 100000,
                     n.burnin = 50000,

@@ -119,7 +119,7 @@ for (k in 1:length(NA.idx)){
 
 parameters <- c(c("U", "mean.U1", "sigma.U1",
                   "mean.U2", "sigma.U2", "p",
-                  "r",  "loglik", "N"),
+                  "r",  "loglik", "N", "N0"),
                 missing.y)
 
 MCMC.params$model.file = "models/Model_norm_Pois_2Us_skip_Nsum.txt"
@@ -151,12 +151,14 @@ summary(jm)
 
 ```
 
-These parameters look okay; Rhat stats are < 1.1.   
+These parameters are not okay; Rhat stats are > 1.1.   
 
 ```{r}
 summary.df <- data.frame(jm$summary) %>% rownames_to_column(var = "parameter") 
-#summary.df %>% filter(Rhat > 1.1)
+summary.df %>% filter(Rhat > 1.1)
 ```
+
+Dirichlet parameters didn't converge well.
 
 For each beach, overlay data and estimated population growth +/- 95% CI.
 
@@ -183,7 +185,8 @@ for (p in 1:length(NA.idx)){
               Nt.high = X97.5.)
   # convert them into anti-log space
   #Nt <- exp(log.Nt) - 1
-  Nt$year <- seq(min(nest.counts.ID$year), max(nest.counts.ID$year))
+  Nt$year <- seq(from = min(summary.years$year.1), 
+                to = max(summary.years$year.2))
   
   Nt %>% left_join(nest.counts.ID, by = "year") -> nest.counts.ID.Nt
   
@@ -232,8 +235,8 @@ for (p in 1:length(NA.idx)){
 
   # Plot U1 and U2 posteriors for each beach
   p.2 <- mcmc_dens(jm$samples, 
-                   pars = c(paste0("U[", p, ",1]"), 
-                            paste0("U[", p, ",2]")))
+                   pars = c(paste0("U[1]"), 
+                            paste0("U[2]")))
   
   # Combine the two plots
   p.1.2 <- ggpubr::ggarrange(p.1, p.2, nrow = 2)
@@ -247,5 +250,23 @@ for (p in 1:length(NA.idx)){
 
 ```
 
+```{r}
+mcmc_dens(jm$samples, pars = c("r[1]", "r[2]", "r[3]", "r[4]"))
+```
+
+
+
+```{r}
+mcmc_dens(jm$samples, pars = c("N0[1]", "N0[2]", "N0[3]", "N0[4]"))
+```
+
+```{r}
+mcmc_dens(jm$samples, pars = c("N0[21]", "N0[22]", "N0[23]", "N0[24]"))
+```
+
+
+```{r}
+mcmc_dens(jm$samples, pars = c("p"))
+```
 
 

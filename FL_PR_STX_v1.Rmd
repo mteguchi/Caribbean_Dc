@@ -28,163 +28,40 @@ col.def <- cols(ID = col_integer(),
                 nests = col_integer())
 
 nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>% 
-  mutate(lat_band = ifelse(latitude < 26, 25,
-                           ifelse(latitude < 27, 26,
-                                  ifelse(latitude < 28, 27,
-                                         ifelse(latitude < 29, 28,
-                                                ifelse(latitude < 30, 29,
-                                                       ifelse(latitude < 31, 30)))))),
-         beach_f = as.factor(toupper(beach)))
+  mutate(beach_f = as.factor(toupper(beach)))
 
 ```
 
 
-See what they look like:
+Try fitting growth models - we can use the same model as the last paper as required/requested by KS. Other state-space models also were fit but the results were not welcomed...  
+
+First, fit the model to the same dataset as the previous paper so that we can be satisfied with the model. 
 
 ```{r}
-ggplot(data = nest.counts) +
-  geom_point(aes(x = year, y = log(nests+1),
-                 color = as.factor(ID))) +
-  geom_line(aes(x = year, y = log(nests + 1),
-                color = as.factor(ID),
-                group = as.factor(ID))) +
-  
-  facet_wrap( ~ lat_band, nrow = 3) +
-  theme(legend.position = "none")
-```
 
-Plot each beach grouped by latitude band
-
-```{r}
-nest.counts %>% filter(lat_band == 25) -> nest.counts.25
-ggplot(data = nest.counts.25) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID)) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 25")
-```
-
-Too many beaches here so split them into 3 groups.
-
-```{r}
-nest.counts %>% filter(lat_band == 26) -> nest.counts.26
-unique.IDs <- unique(nest.counts.26$ID)
-first.10 <- unique.IDs[1:10]
-nest.counts.26 %>% filter(ID %in% first.10) -> nest.counts.26.1
-
-ggplot(data = nest.counts.26.1) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 26")
-```
-
-```{r}
-second.10 <- unique.IDs[11:20]
-nest.counts.26 %>% filter(ID %in% second.10) -> nest.counts.26.2
-
-ggplot(data = nest.counts.26.2) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 26")
-```
-
-```{r}
-beaches.21.31 <- unique.IDs[21:31]
-nest.counts.26 %>% filter(ID %in% beaches.21.31) -> nest.counts.26.3
-
-ggplot(data = nest.counts.26.3) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 26")
-```
-
-
-```{r}
-nest.counts %>% filter(lat_band == 27) -> nest.counts.27
-ggplot(data = nest.counts.27) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 27")
-```
-
-
-```{r}
-nest.counts %>% filter(lat_band == 28) -> nest.counts.28
-ggplot(data = nest.counts.28) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 28")
-```
-
-
-```{r}
-nest.counts %>% filter(lat_band == 29) -> nest.counts.29
-ggplot(data = nest.counts.29) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 29")
-```
-
-
-```{r}
-nest.counts %>% filter(lat_band == 30) -> nest.counts.30
-ggplot(data = nest.counts.30) +
-  geom_point(aes(x = year, y = log(nests+1))) +
-  geom_line(aes(x = year, y = log(nests + 1))) +
-  facet_wrap( ~ factor(ID), ncol = 3) +
-  theme(legend.position = "none") + 
-  labs(title = "Latitude 30")
-```
-
-Time series are different lengths. 
-
-```{r}
-nest.counts %>% group_by(ID) %>%
-  summarise(n = length(year),
-            latitude = first(latitude),
-            distance = first(distance),
-            lat_band = first(lat_band)) -> nest.counts.n
-
-ggplot(data = nest.counts.n) + 
-  geom_point(aes(x = lat_band, y = n))
-```
-
-
-Try fitting growth models - we can use the same model as the last paper first. 
-
-```{r}
-X <- cbind(nest.counts$distance - median(nest.counts$distance),
-           nest.counts$days_week - median(nest.counts$days_week),
-           nest.counts$days_year - median(nest.counts$days_year))
-
-nest.counts %>% select(ID, latitude) %>% group_by(ID) %>%
+nest.counts %>% select(ID, latitude) %>% 
+  group_by(ID) %>%
   summarise(latitude = first(latitude)) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2) -> lat.dat 
 
-#min(nest.counts$year):max(nest.counts$year)
+X <- cbind(nest.counts$distance - median(nest.counts$distance),
+           nest.counts$days_week - median(nest.counts$days_week),
+           nest.counts$days_year - median(nest.counts$days_year))
 
-jags.data <- list(N = length(nest.counts$nests),
-                  nbeach = nrow(lat.dat),
-                  count = nest.counts$nests,
-                  beach = nest.counts$ID,
-                  yearc = nest.counts$year/(median(min(nest.counts$year):max(nest.counts$year))),
-                  X = X,
-                  latc = lat.dat$latc,
-                  latc2 = lat.dat$latc2)
+# beach ID = 12 is missing from the earlier data... 
+nest.counts %>% filter(year < 2009) %>%
+  mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.2008
+
+nest.counts.2008 %>% select(ID2, latitude) %>% 
+  group_by(ID2) %>%
+  summarise(latitude = first(latitude)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2) -> lat.dat.2008 
+
+X.2008 <- cbind(nest.counts.2008$distance - median(nest.counts.2008$distance),
+                nest.counts.2008$days_week - median(nest.counts.2008$days_week),
+                nest.counts.2008$days_year - median(nest.counts.2008$days_year))
 
 MCMC.params <- list(n.samples = 100000,
                     n.burnin = 50000,
@@ -193,12 +70,86 @@ MCMC.params <- list(n.samples = 100000,
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "delta1", "delta2",
+                "sigma.e", "sigma.B",
+                "sigma.a0", "sigma.a1",
                 "floridapc", "probP", "deviance",
                 "Devobs", "Devpred")
 
 MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
 
-if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt.rds")){
+jags.data.2008 <- list(N = length(nest.counts.2008$nests),
+                       nbeach = length(unique(lat.dat.2008$ID2)),
+                       count = nest.counts.2008$nests,
+                       beach = nest.counts.2008$ID2,
+                       yearc = nest.counts.2008$year/(median(min(nest.counts.2008$year):max(nest.counts.2008$year))),
+                       X = X.2008,
+                       latc = lat.dat.2008$latc,
+                       latc2 = lat.dat.2008$latc2)
+
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")){
+  jm.2008 <- jags(data = jags.data.2008,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+  
+  saveRDS(jm.2008, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
+  
+} else {
+  jm.2008 <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
+}
+
+summary(jm.2008)
+```
+
+TAke a look at the overdispersion variance parameter.
+
+```{r}
+mcmc_dens(jm.2008$samples, pars = "sigma.e")
+```
+
+Is this small emough to consider it to be zero? 
+
+Take a look at some parameters to see they are comparable to the published numbers.
+
+```{r}
+nest.counts.2008 %>% filter(beach_f == "MIAMI BEACHES") %>% 
+  select(ID2) %>% unique() %>% as.vector() -> Miami_Beaches_ID2
+
+jm.2008$summary %>% data.frame() %>%
+  rownames_to_column(var = "Parameter") -> estimates.2008
+
+estimates.2008 %>% filter(Parameter == paste0("a1pc[", Miami_Beaches_ID2, "]"))
+```
+
+This doesn't look so good. Check the vartiance term
+
+```{r}
+estimates.2008 %>% filter(Parameter == )
+```
+
+
+
+Then use all data:
+
+```{r}
+#min(nest.counts$year):max(nest.counts$year)
+
+jags.data <- list(N = length(nest.counts$nests),
+                  nbeach = length(unique(lat.dat$ID)),
+                  count = nest.counts$nests,
+                  beach = nest.counts$ID,
+                  yearc = nest.counts$year/(median(min(nest.counts$year):max(nest.counts$year))),
+                  X = X,
+                  latc = lat.dat$latc,
+                  latc2 = lat.dat$latc2)
+
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs.rds")){
   jm <- jags(data = jags.data,
              #inits = inits,
              parameters.to.save= parameters,
@@ -210,20 +161,29 @@ if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt.rds")){
              DIC = T, 
              parallel=T)
   
-  saveRDS(jm, file = "RData/JAGS_out_Dist_rSlope_rInt.rds")
+  saveRDS(jm, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs.rds")
   
 } else {
-  jm <- readRDS("RData/JAGS_out_Dist_rSlope_rInt.rds")
+  jm <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs.rds")
 }
 
 summary(jm)
 
-mcmc_trace(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
-mcmc_dens(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
-mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
-mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
+# mcmc_trace(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
+# mcmc_dens(jm$samples, pars = c("beta[1]", "beta[2]", "beta[3]"))
+# mcmc_trace(jm$samples, pars = c("delta1", "delta2"))
+# mcmc_dens(jm$samples, pars = c("delta1", "delta2"))
 
 ```
+
+TAke a look at the overdispersion variance parameter.
+
+```{r}
+mcmc_dens(jm$samples, pars = "sigma.e")
+```
+
+It's definitely not zero... 
+
 
 These parameters look good but some Rhat stats are too high, according to the output comments. 
 

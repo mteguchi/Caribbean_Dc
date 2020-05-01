@@ -70,7 +70,7 @@ MCMC.params <- list(n.samples = 100000,
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "delta1", "delta2",
-                "sigma.e", "sigma.B",
+                "sigma.e", "Sigma.B",
                 "sigma.a0", "sigma.a1",
                 "floridapc", "probP", "deviance",
                 "Devobs", "Devpred")
@@ -130,8 +130,23 @@ estimates.2008 %>% filter(Parameter == paste0("a1pc[", Miami_Beaches_ID2, "]"))
 This doesn't look so good. Check the vartiance term
 
 ```{r}
-estimates.2008 %>% filter(Parameter == )
+estimates.2008 %>% filter(Parameter == "Sigma.B[1,1]")
 ```
+
+Yes, this is huge!
+
+```{r}
+estimates.2008 %>% filter(Parameter == "Sigma.B[2,2]")
+
+```
+
+```{r}
+estimates.2008 %>% filter(Parameter == "Sigma.B[1,2]")
+
+```
+
+This explains the problem... so, what went wrong? 
+
 
 
 

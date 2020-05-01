@@ -147,6 +147,18 @@ estimates.2008 %>% filter(Parameter == "Sigma.B[1,2]")
 
 This explains the problem... so, what went wrong? 
 
+Perhaps some beaches have no data? In the paper, there were 68 beaches, whereas I have 73. Take a look at the number of data points per beach:
+
+```{r}
+nest.counts.2008 %>% group_by(ID2) %>% 
+  summarise(n = n(),
+            name = first(beach_f),
+            latitude = first(latitude)) %>%
+  arrange(latitude) -> sample.size.2008
+
+write_csv(sample.size.2008, path = "data/sample_size_2008.csv")
+head(sample.size.2008)
+```
 
 
 

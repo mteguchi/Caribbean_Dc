@@ -45,7 +45,7 @@ nest.counts %>% select(ID, latitude) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2) -> lat.dat 
 
-X <- cbind(nest.counts$distance - median(nest.counts$distance),
+X <- cbind(log(nest.counts$distance),
            nest.counts$days_week - median(nest.counts$days_week),
            nest.counts$days_year - median(nest.counts$days_year))
 
@@ -59,7 +59,7 @@ nest.counts.2008 %>% select(ID2, latitude) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2) -> lat.dat.2008 
 
-X.2008 <- cbind(nest.counts.2008$distance - median(nest.counts.2008$distance),
+X.2008 <- cbind(log(nest.counts.2008$distance),
                 nest.counts.2008$days_week - median(nest.counts.2008$days_week),
                 nest.counts.2008$days_year - median(nest.counts.2008$days_year))
 
@@ -107,6 +107,16 @@ if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")){
 summary(jm.2008)
 ```
 
+Look at the parameters that didn't converge
+```{r}
+summary.df <- data.frame(jm.2008$summary) %>% rownames_to_column("Parameter")
+
+summary.df %>% filter(Rhat > 1.1) -> not.converge
+not.converge$Parameter
+```
+
+
+
 TAke a look at the overdispersion variance parameter.
 
 ```{r}
@@ -127,7 +137,7 @@ jm.2008$summary %>% data.frame() %>%
 estimates.2008 %>% filter(Parameter == paste0("a1pc[", Miami_Beaches_ID2, "]"))
 ```
 
-This doesn't look so good. Check the vartiance term
+This doesn't look so good. Check the variance term
 
 ```{r}
 estimates.2008 %>% filter(Parameter == "Sigma.B[1,1]")
@@ -156,10 +166,17 @@ nest.counts.2008 %>% group_by(ID2) %>%
             latitude = first(latitude)) %>%
   arrange(latitude) -> sample.size.2008
 
-write_csv(sample.size.2008, path = "data/sample_size_2008.csv")
+#write_csv(sample.size.2008, path = "data/sample_size_2008.csv")
 head(sample.size.2008)
 ```
 
+There are more beaches in the new dataset than in the paper. Additional ones are... there are 10 of them. I found these by manually comparing the output file (sample_size_2008.csv) and the paper. In the paper, there are supposed to be 68 beaches (p. 265)... So, they don't match! 
+
+```{r}
+new.ID2s <- c(71, 1, 49, 70, 69, 73, 68, 72)
+
+#Remove these and run again to see
+```
 
 
 Then use all data:

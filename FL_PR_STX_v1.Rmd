@@ -13,6 +13,7 @@ library(readr)
 library(lubridate)
 library(jagsUI)
 library(bayesplot)
+library(stringr)
 ```
 
 Get data;
@@ -37,34 +38,7 @@ Try fitting growth models - we can use the same model as the last paper as requi
 
 First, fit the model to the same dataset as the previous paper so that we can be satisfied with the model. 
 
-```{r}
-
-nest.counts %>% select(ID, latitude) %>% 
-  group_by(ID) %>%
-  summarise(latitude = first(latitude)) %>%
-  mutate(latc = latitude - mean(latitude),
-         latc2 = latc^2) -> lat.dat 
-
-X <- cbind(log(nest.counts$distance),
-           nest.counts$days_week - median(nest.counts$days_week),
-           nest.counts$days_year - median(nest.counts$days_year))
-
-# beach ID = 12 is missing from the earlier data... 
-nest.counts %>% filter(year < 2009) %>%
-  mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.2008
-
-nest.counts.2008 %>% select(ID2, latitude) %>% 
-  group_by(ID2) %>%
-  summarise(latitude = first(latitude)) %>%
-  mutate(latc = latitude - mean(latitude),
-         latc2 = latc^2) -> lat.dat.2008 
-
-X.2008 <- cbind(log(nest.counts.2008$distance),
-                nest.counts.2008$days_week - median(nest.counts.2008$days_week),
-                nest.counts.2008$days_year - median(nest.counts.2008$days_year))
-```
-
-Compare data with the previous version:
+Run the analysis with the data used in the publication. 
 
 ```{r}
 data.MS <- list(N = 1385, nbeach = 68, count = c(4, 0, 0, 7, 0, 
@@ -781,6 +755,31 @@ data.MS <- list(N = 1385, nbeach = 68, count = c(4, 0, 0, 7, 0,
 
 ```
 
+Look at the data:
+
+```{r}
+# order the data by latitude
+data.MS.df <- data.frame(beach = data.MS$beach,
+                         yearc = data.MS$yearc,
+                         count = data.MS$count,
+                         cov1 = data.MS$X[, 1],
+                         cov2 = data.MS$X[, 2],
+                         cov3 = data.MS$X[, 3])
+
+ns <- data.MS.df %>% group_by(beach = as.factor(beach)) %>%
+  summarise(n = n())
+
+lat.MS.df <- data.frame(beach = seq(1, data.MS$nbeach),
+                        latc = data.MS$latc,
+                        latc2 = data.MS$latc2,
+                        n = ns$n)  
+  
+data.MS.df %>% left_join(lat.MS.df, by = "beach") -> tmp
+data.MS.df <-  arrange(tmp, latc)
+
+```
+
+
 
 ```{r}
 MCMC.params <- list(n.samples = 100000,
@@ -789,6 +788,8 @@ MCMC.params <- list(n.samples = 100000,
                     n.chains = 5)
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
                 "delta1", "delta2",
                 "sigma.e", "Sigma.B",
                 "sigma.a0", "sigma.a1",
@@ -796,6 +797,94 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "Devobs", "Devpred")
 
 MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
+
+
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")){
+  jm.MS <- jags(data = data.MS,
+                #inits = inits,
+                parameters.to.save= parameters,
+                model.file = MCMC.params$model.file,
+                n.chains = MCMC.params$n.chains,
+                n.burnin = MCMC.params$n.burnin,
+                n.thin = MCMC.params$n.thin,
+                n.iter = MCMC.params$n.samples,
+                DIC = T, 
+                parallel=T)
+  
+  saveRDS(jm.MS, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")
+  
+} else {
+  jm.MS <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")
+}
+
+summary(jm.MS)
+```
+
+The MS dataset converges fine. Compare results to the publication.
+
+```{r}
+summary.MS.df <- data.frame(jm.MS$summary) %>% rownames_to_column("Parameter")
+
+# find the beach-specific growth rate in percent
+#mcmc_trace(jm.MS$samples, pars = "a1pc[38]")
+
+summary.MS.df %>% filter(str_detect(Parameter, pattern = "a1pc")) %>%
+  rownames_to_column("beach") %>%
+  transmute(beach = as.numeric(beach),
+            mean_a1pc = mean,
+            sd_a1pc = sd,
+            low25_a1pc = X2.5.,
+            median_a1pc = X50.,
+            upper975_a1pc = X97.5.)-> a1pc
+
+a1pc %>% left_join(lat.MS.df, by = "beach") %>%
+  arrange(latc) -> a1pc
+
+summary.MS.df %>% filter(str_detect(Parameter, pattern = "mu.a1")) %>%
+  rownames_to_column("beach") %>%
+  transmute(beach = as.numeric(beach),
+            mean_mu.a1 = mean,
+            sd_mu.a1 = sd,
+            low25_mu.a1 = X2.5.,
+            median_mu.a1 = X50.,
+            upper975_mu.a1 = X97.5.)-> mu.a1
+
+mu.a1 %>% left_join(lat.MS.df, by = "beach") %>%
+  arrange(latc) -> mu.a1
+```
+
+Results look similar to what were reported in the publication. They are not identical, which is a bit concerning... but they are in the same ballpark. 
+
+So, the code is working fine.
+
+Start here next to make the data comparable between the old and new and run analyses again. Extract the same data from the newly obtained data. These should be identical to what were analyzed above... 
+
+
+```{r}
+
+nest.counts %>% select(ID, latitude) %>% 
+  group_by(ID) %>%
+  summarise(latitude = first(latitude)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2) -> lat.dat 
+
+X <- cbind(log(nest.counts$distance),
+           nest.counts$days_week - median(nest.counts$days_week),
+           nest.counts$days_year - median(nest.counts$days_year))
+
+# beach ID = 12 is missing from the earlier data... 
+nest.counts %>% filter(year < 2009) %>%
+  mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.2008
+
+nest.counts.2008 %>% select(ID2, latitude) %>% 
+  group_by(ID2) %>%
+  summarise(latitude = first(latitude)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2) -> lat.dat.2008 
+
+X.2008 <- cbind(log(nest.counts.2008$distance),
+                nest.counts.2008$days_week - median(nest.counts.2008$days_week),
+                nest.counts.2008$days_year - median(nest.counts.2008$days_year))
 
 jags.data.2008 <- list(N = length(nest.counts.2008$nests),
                        nbeach = length(unique(lat.dat.2008$ID2)),
@@ -824,32 +913,14 @@ if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")){
   jm.2008 <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
 }
 
-if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")){
-  jm.MS <- jags(data = data.MS,
-             #inits = inits,
-             parameters.to.save= parameters,
-             model.file = MCMC.params$model.file,
-             n.chains = MCMC.params$n.chains,
-             n.burnin = MCMC.params$n.burnin,
-             n.thin = MCMC.params$n.thin,
-             n.iter = MCMC.params$n.samples,
-             DIC = T, 
-             parallel=T)
-  
-  saveRDS(jm.MS, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")
-  
-} else {
-  jm.MS <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_MS.rds")
-}
-
-summary(jm.2008)
 ```
+
 
 Look at the parameters that didn't converge
 ```{r}
-summary.df <- data.frame(jm.2008$summary) %>% rownames_to_column("Parameter")
+summary.2008.df <- data.frame(jm.2008$summary) %>% rownames_to_column("Parameter")
 
-summary.df %>% filter(Rhat > 1.1) -> not.converge
+summary.2008.df %>% filter(Rhat > 1.1) -> not.converge
 not.converge$Parameter
 ```
 

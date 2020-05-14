@@ -16,24 +16,6 @@ library(bayesplot)
 library(stringr)
 ```
 
-Get data;
-
-```{r}
-col.def <- cols(ID = col_integer(),
-                year = col_integer(),
-                beach = col_character(),
-                latitude = col_double(),
-                distance = col_double(),
-                days_week = col_integer(),
-                days_year = col_integer(),
-                nests = col_integer())
-
-nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>% 
-  mutate(beach_f = as.factor(toupper(beach)))
-
-```
-
-
 Try fitting growth models - we can use the same model as the last paper as required/requested by KS. Other state-space models also were fit but the results were not welcomed...  
 
 First, fit the model to the same dataset as the previous paper so that we can be satisfied with the model. 
@@ -779,7 +761,7 @@ data.MS.df <-  arrange(tmp, latc)
 
 ```
 
-
+Set up jags.
 
 ```{r}
 MCMC.params <- list(n.samples = 100000,
@@ -857,40 +839,47 @@ Results look similar to what were reported in the publication. They are not iden
 
 So, the code is working fine.
 
-Start here next to make the data comparable between the old and new and run analyses again. Extract the same data from the newly obtained data. These should be identical to what were analyzed above... 
+Extract the same data from the newly obtained data. These should be identical to what were analyzed above... 
 
+Get data;
 
 ```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
 
-nest.counts %>% select(ID, latitude) %>% 
-  group_by(ID) %>%
-  summarise(latitude = first(latitude)) %>%
-  mutate(latc = latitude - mean(latitude),
-         latc2 = latc^2) -> lat.dat 
+nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)))
 
-X <- cbind(log(nest.counts$distance),
-           nest.counts$days_week - median(nest.counts$days_week),
-           nest.counts$days_year - median(nest.counts$days_year))
-
-# beach ID = 12 is missing from the earlier data... 
-nest.counts %>% filter(year < 2009) %>%
+nest.counts %>% filter(year < 2009) %>% 
   mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.2008
 
-nest.counts.2008 %>% select(ID2, latitude) %>% 
-  group_by(ID2) %>%
+nest.counts.2008 %>% 
+  select(ID, latitude) %>% 
+  group_by(ID) %>%
   summarise(latitude = first(latitude)) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2) -> lat.dat.2008 
 
-X.2008 <- cbind(log(nest.counts.2008$distance),
+# length surveyed, # days per week surveyed, # days surveyed per year
+# 
+X.2008 <- cbind(nest.counts.2008$distance - median(nest.counts.2008$distance), 
                 nest.counts.2008$days_week - median(nest.counts.2008$days_week),
                 nest.counts.2008$days_year - median(nest.counts.2008$days_year))
 
+# beach ID = 12 is missing from the earlier data... 
+median.year.2008 <- round(median(seq(min(nest.counts.2008$year),
+                                     max(nest.counts.2008$year))))
 jags.data.2008 <- list(N = length(nest.counts.2008$nests),
                        nbeach = length(unique(lat.dat.2008$ID2)),
                        count = nest.counts.2008$nests,
                        beach = nest.counts.2008$ID2,
-                       yearc = nest.counts.2008$year/(median(min(nest.counts.2008$year):max(nest.counts.2008$year))),
+                       yearc = (nest.counts.2008$year - median.year.2008),
                        X = X.2008,
                        latc = lat.dat.2008$latc,
                        latc2 = lat.dat.2008$latc2)

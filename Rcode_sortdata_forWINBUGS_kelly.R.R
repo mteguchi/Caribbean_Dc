@@ -12,7 +12,10 @@
 
 
 
-data<- read.csv("H:\Dc_data_1979_2008_for_model.csv")  # obtain turtle data.
+#data<- read.csv("H:\Dc_data_1979_2008_for_model.csv")  # obtain turtle data.
+data<- read.csv("data/Dc_data_1979_2008_for_model.csv")  # obtain turtle data.
+
+data <- na.omit(data)   # TE added
 
 lat1<- unique(data$lat)  # obtains all the unique latitude values, call it lat1
 latc<- lat1-mean(lat1)   # create a new variable called latc that is the centred lat1
@@ -34,8 +37,20 @@ N<- nrow(data) #  number of records in data set (in previous analysis it was 125
 X<- cbind(data$distance_c,
           data$days.week_c,
           data$days.year_c)  # forms a matrix of 3 columns - 1 for each effort predictor, each row is a record
-X<- t(X)   # transposes matrix so there are 3 rows - 1 for each effort predictor and the number of columns matches number of records
+
+# TE: this transposing makes no sense... the output has three columns, not 3 rows. 
+#X<- t(X)   # transposes matrix so there are 3 rows - 1 for each effort predictor and the number of columns matches number of records
 		# this is necessary for organising this data for WinBUGs analysis
+
+# dput(list(N=as.numeric(N),
+#           nbeach=as.numeric(nbeach),
+#           count=as.numeric(data$nests),
+#           beach=as.numeric(data$ID),
+#           yearc=data$yearcov,
+#           X=X,
+#           latc=round(latc,3),
+#           latc2=round(latc2,3)),
+#      file="h:/winbugsdata.txt")   # saves data to file called winbugsdata.txt
 
 dput(list(N=as.numeric(N),
           nbeach=as.numeric(nbeach),
@@ -45,7 +60,6 @@ dput(list(N=as.numeric(N),
           X=X,
           latc=round(latc,3),
           latc2=round(latc2,3)),
-     file="h:/winbugsdata.txt")   # saves data to file called winbugsdata.txt
-
+     file="data/winbugsdata_new.txt")   # saves data to file called winbugsdata.txt
 
 

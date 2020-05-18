@@ -1389,11 +1389,11 @@ Then run the same model:
 ```{r}
 # order the data by latitude
 data.MS.new.df <- data.frame(beach = data.MS.new$beach,
-                         yearc = data.MS.new$yearc,
-                         count = data.MS.new$count,
-                         cov1 = data.MS.new$X[, 1],
-                         cov2 = data.MS.new$X[, 2],
-                         cov3 = data.MS.new$X[, 3])
+                             yearc = data.MS.new$yearc,
+                             count = data.MS.new$count,
+                             cov1 = data.MS.new$X[, 1],
+                             cov2 = data.MS.new$X[, 2],
+                             cov3 = data.MS.new$X[, 3])
 
 ns.new <- data.MS.new.df %>% group_by(beach = as.factor(beach)) %>%
   summarise(n = n())
@@ -1484,16 +1484,21 @@ nest.counts <- read_csv("data/FL_PR_STX.csv", col_types = col.def) %>%
 nest.counts %>% filter(year < 2009) %>% 
   mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.2008
 
-nest.counts.2008 %>% group_by(ID = as.factor(ID)) %>%
+nest.counts.2008 %>% 
+  group_by(ID2) %>%
   summarise(n = n()) -> ns.2008
 
 nest.counts.2008 %>% 
-  select(ID, latitude) %>% 
+  select(ID2, ID, latitude, beach_f) %>% 
   group_by(ID) %>%
-  summarise(latitude = first(latitude)) %>%
+  summarise(latitude = first(latitude),
+            ID2 = first(ID2),
+            name = first(beach_f)) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2,
          beach = ID,
+         ID2 = ID2,
+         name = name,
          n = ns.2008$n) -> lat.dat.2008 
 
 # length surveyed, # days per week surveyed, # days surveyed per year
@@ -1505,6 +1510,8 @@ X.2008 <- cbind(nest.counts.2008$distance - median(nest.counts.2008$distance),
 # beach ID = 12 is missing from the earlier data... 
 median.year.2008 <- round(median(seq(min(nest.counts.2008$year),
                                      max(nest.counts.2008$year))))
+
+# jags.data.2008 contains wrong counts... check this!
 jags.data.2008 <- list(N = length(nest.counts.2008$nests),
                        nbeach = length(unique(nest.counts.2008$ID2)),
                        count = nest.counts.2008$nests,
@@ -1541,6 +1548,8 @@ summary(jm.2008)
 
 At least they converged fine! 
 
+Note that beach IDs are ID2, not the original ID numbers. So, we need to make sure right ones are used. 
+
 ```{r}
 summary.2008.df <- data.frame(jm.2008$summary) %>%
   rownames_to_column("Parameter")
@@ -1550,27 +1559,27 @@ summary.2008.df <- data.frame(jm.2008$summary) %>%
 
 summary.2008.df %>% filter(str_detect(Parameter, pattern = "a1pc")) %>%
   rownames_to_column("beach") %>%
-  transmute(beach = as.numeric(beach),
+  transmute(ID = as.numeric(beach),
             mean_a1pc = mean,
             sd_a1pc = sd,
             low25_a1pc = X2.5.,
             median_a1pc = X50.,
             upper975_a1pc = X97.5.)-> a1pc.2008
 
-a1pc.2008 %>% left_join(lat.dat.2008, by = "beach") %>%
+a1pc.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
   arrange(latc) -> a1pc.2008
 
 summary.2008.df %>% 
   filter(str_detect(Parameter, pattern = "mu.a1")) %>%
   rownames_to_column("beach") %>%
-  transmute(beach = as.numeric(beach),
+  transmute(ID = as.numeric(beach),
             mean_mu.a1 = mean,
             sd_mu.a1 = sd,
             low25_mu.a1 = X2.5.,
             median_mu.a1 = X50.,
             upper975_mu.a1 = X97.5.)-> mu.a1.2008
 
-mu.a1.2008 %>% left_join(lat.dat.2008, by = "beach") %>%
+mu.a1.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
   arrange(latc) -> mu.a1.2008
 
 #head(a1pc.2008)
@@ -1600,12 +1609,12 @@ ggplot() +
                     x = beach),
                 color = "red") + 
   geom_point(data = a1pc.2008, 
-            aes(x = beach, y = mean_a1pc),
+            aes(x = ID, y = mean_a1pc),
             color = "green") + 
   geom_errorbar(data = a1pc.2008,
               aes(ymin = low25_a1pc,
                   ymax = upper975_a1pc,
-                  x = beach),
+                  x = ID),
               color = "green")
 
 ```
@@ -1615,28 +1624,27 @@ Some are quite different but not all. Some are very similar... Need to look into
 Find out which beaches had the difference in means that were greater than 2.
 
 ```{r}
-a1pc.2008 %>% select(beach, mean_a1pc) %>%
-  transmute(beach = beach,
+a1pc.2008 %>% select(ID, ID2, mean_a1pc) %>%
+  transmute(beach = ID,
+            ID2 = ID2,
             mean_a1pc_2008 = mean_a1pc) %>%
-  right_join(a1pc) %>%
+  right_join(a1pc, by = "beach") %>%
   mutate(dif_a1pc = abs(mean_a1pc_2008 - mean_a1pc)) %>%
   filter(dif_a1pc > 2) %>% 
-  select(beach, mean_a1pc, mean_a1pc_2008, latc, n, dif_a1pc) -> dif_a1pc
+  select(beach, ID2, mean_a1pc, mean_a1pc_2008, latc, n, dif_a1pc) -> dif_a1pc
 
 # check data
 dif.data.list <- vector(mode = "list", length = nrow(dif_a1pc))
 
 # no need to run the for loop... 
-k <- 3
+k <- 1
 #for (k in 1:length(dif.data.list)){
   data.old <- data.MS$count[data.MS$beach == dif_a1pc$beach[k]]
   data.new <- data.MS.new$count[data.MS.new$beach == dif_a1pc$beach[k]]
-  data.2008 <- jags.data.2008$count[jags.data.2008$beach == dif_a1pc$beach[k]]
+  data.2008 <- jags.data.2008$count[jags.data.2008$beach == dif_a1pc$ID2[k]]
   
 #}
 ```
-
-So, yes, the beach numbers are different between what I created out of Kelly's new data and the dataset used in the MS. That explains it... 
 
 Let's make a table comparing the two datasets using the beach names.
 
@@ -1678,8 +1686,8 @@ for (k in 1:length(dif.data.list)){
   data.new <- data.frame(count = data.MS.new$count[data.MS.new$beach == dif_a1pc$beach[k]],
                          yearc = data.MS.new$yearc[data.MS.new$beach == dif_a1pc$beach[k]])
   
-  data.2008 <- data.frame(count = jags.data.2008$count[jags.data.2008$beach == dif_a1pc$beach[k]],
-                          yearc = jags.data.2008$yearc[jags.data.2008$beach == dif_a1pc$beach[k]])
+  data.2008 <- data.frame(count = jags.data.2008$count[jags.data.2008$beach == dif_a1pc$ID2[k]],
+                          yearc = jags.data.2008$yearc[jags.data.2008$beach == dif_a1pc$ID2[k]])
   
   filter(beach.ID.new, ID == dif_a1pc$beach[k]) %>% select(beach_f) -> tmp
   
@@ -1707,84 +1715,101 @@ for (k in 1:length(dif.data.list)){
                alpha = 0.5) +
     labs(title = tmp[[1]])
  
-  #ggsave(filename = paste0("figures/data_ID_", dif_a1pc$beach[k], ".png"),
-  #       device = "png", dpi = 600)
+  ggsave(filename = paste0("figures/data_ID_", dif_a1pc$beach[k], ".png"),
+         device = "png", dpi = 600)
 }
 #filter(beach.ID.new, ID == dif_a1pc$beach[2]) %>% select(beach_f)
 #filter(beach.ID.old, ID == dif_a1pc$beach[2])
 ```
 
-Data are quite different in all these beaches... how about the rest? No wonder estimates are different! 
+They look okay, except Beach ID = 4 (Broward Co Beach) - check with Kelly on this. 
 
-Going back to the step one of plotting all data points with new and old data.
+I think I figured out the problem! Finally on 2020-05-18.
 
-```{r}
-nest.counts.old %>% 
-  mutate(lat_band = ifelse(latitude < 26, 25,
-                           ifelse(latitude < 27, 26,
-                                  ifelse(latitude < 28, 27,
-                                         ifelse(latitude < 29, 28,
-                                                ifelse(latitude < 30, 29,
-                                                       ifelse(latitude < 31, 30))))))) -> nest.counts.old
-
-nest.counts %>% 
-  mutate(lat_band = ifelse(latitude < 26, 25,
-                           ifelse(latitude < 27, 26,
-                                  ifelse(latitude < 28, 27,
-                                         ifelse(latitude < 29, 28,
-                                                ifelse(latitude < 30, 29,
-                                                       ifelse(latitude < 31, 30))))))) -> nest.counts
-
-
-```
+No need to do the following...
 
 Plot by each beach and see differences:
-```{r}
-beach.IDs <- unique(nest.counts.old$ID)
-for (k in 1:length(beach.IDs)){
-  nest.counts %>% filter(ID == beach.IDs[k]) %>%
-    select(ID, year, nests) %>%
-    mutate(set = 2) -> nest.counts.tmp
-  nest.counts.old %>% filter(ID == beach.IDs[k]) %>%
-    select(ID, year, nests) %>%
-    mutate(set = 1) -> nest.counts.old.tmp
-  
-  nest.counts.old.tmp %>% full_join(nest.counts.tmp) -> nest.counts.all.tmp
-  
-  ggplot(data = nest.counts.all.tmp) +
-    geom_point(aes(x = year, y = log(nests+1), 
-                   color = set),
-               alpha = 0.4) +
-    geom_line(aes(x = year, y = log(nests + 1), 
-                  color = set),
-              alpha = 0.4) +
-    facet_wrap( ~ factor(ID)) +
-    theme(legend.position = "none")
-  
-  ggsave(filename = paste0("figures/counts_ID_", beach.IDs[k], ".png"),
-         device = "png", dpi = 600)
-}
 
-```
+<!-- ```{r} -->
+<!-- beach.IDs <- unique(nest.counts.old$ID) -->
+<!-- k <- 1 -->
+
+<!-- for (k in 1:length(beach.IDs)){ -->
+<!--   nest.counts %>% filter(ID == beach.IDs[k]) %>% -->
+<!--     select(ID, year, nests, beach_f) %>% -->
+<!--     mutate(set = "new") -> nest.counts.tmp -->
+<!--   nest.counts.old %>% filter(ID == beach.IDs[k]) %>% -->
+<!--     select(ID, year, nests, beach_f) %>% -->
+<!--     mutate(set = "old") -> nest.counts.old.tmp -->
+
+<!--   beach.name <- summarise(nest.counts.tmp, name = first(beach_f)) -->
+<!--   nest.counts.old.tmp %>% full_join(nest.counts.tmp) -> nest.counts.all.tmp -->
+
+<!--   ggplot(data = nest.counts.all.tmp) + -->
+<!--     geom_point(aes(x = year, y = nests+1,  -->
+<!--                    color = set), -->
+<!--                alpha = 0.4) + -->
+<!--     geom_line(aes(x = year, y = nests + 1,  -->
+<!--                   color = set), -->
+<!--               alpha = 0.4) + -->
+<!--     labs(title = beach.name[[1]]) -->
+<!--     #facet_wrap( ~ factor(ID)) + -->
+<!--     #theme(legend.position = "none") -->
+
+<!--   ggsave(filename = paste0("figures/counts_ID_", beach.IDs[k], ".png"), -->
+<!--          device = "png", dpi = 600) -->
+<!-- } -->
+
+<!-- ``` -->
 
 Not sure what's hapeening... come back to start from here... These plots look fine - why were they different in the previous plots? 
 
-Then use all data:
+Once I hear back from Kelly on Broward Co. data, I can run the next section.
+
+use all data:
 
 ```{r}
 #min(nest.counts$year):max(nest.counts$year)
+nest.counts %>%  
+  mutate(ID2 = as.numeric(as.factor(ID)))-> nest.counts.all
 
-jags.data <- list(N = length(nest.counts$nests),
-                  nbeach = length(unique(lat.dat$ID)),
-                  count = nest.counts$nests,
-                  beach = nest.counts$ID,
-                  yearc = nest.counts$year/(median(min(nest.counts$year):max(nest.counts$year))),
-                  X = X,
-                  latc = lat.dat$latc,
-                  latc2 = lat.dat$latc2)
+nest.counts.all %>% 
+  group_by(ID2) %>%
+  summarise(n = n()) -> ns.all
+
+nest.counts.all %>% 
+  select(ID2, ID, latitude, beach_f) %>% 
+  group_by(ID) %>%
+  summarise(latitude = first(latitude),
+            ID2 = first(ID2),
+            name = first(beach_f)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2,
+         beach = ID,
+         ID2 = ID2,
+         name = name,
+         n = ns.all$n) -> lat.dat.all 
+
+# length surveyed, # days per week surveyed, # days surveyed per year
+# 
+X.all <- cbind(nest.counts.all$distance - median(nest.counts.all$distance), 
+                nest.counts.all$days_week - median(nest.counts.all$days_week),
+                nest.counts.all$days_year - median(nest.counts.all$days_year))
+
+median.year.all <- round(median(seq(min(nest.counts.all$year),
+                                     max(nest.counts.all$year))))
+
+jags.data.all <- list(N = length(nest.counts.all$nests),
+                      nbeach = length(unique(nest.counts.all$ID2)),
+                      count = nest.counts.all$nests,
+                      beach = nest.counts.all$ID2,
+                      yearc = (nest.counts.all$year - median.year.all),
+                      X = X.all,
+                      latc = lat.dat.all$latc,
+                      latc2 = lat.dat.all$latc2)
 
 if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs.rds")){
-  jm <- jags(data = jags.data,
+  jm <- jags(data = jags.data.all,
              #inits = inits,
              parameters.to.save= parameters,
              model.file = MCMC.params$model.file,

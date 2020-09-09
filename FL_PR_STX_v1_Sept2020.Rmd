@@ -1,0 +1,304 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
+
+New data were received in August 2020. 
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+library(stringr)
+
+MCMC.params <- list(n.samples = 100000,
+                    n.burnin = 50000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+
+```
+
+Get data;
+
+```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+FL.nest.counts <- read_csv("data/FL_Sept2020.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         dataset = "FL",
+         ID2 = as.numeric(as.factor(ID)))
+
+PR.nest.counts <- read_csv("data/PR_Sept2020.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         dataset = "PR",
+         ID2 = as.numeric(as.factor(ID)))
+
+STX.nest.counts <- read_csv("data/STX_Sept2020.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         dataset = "STX",
+         ID2 = as.numeric(as.factor(ID)))
+
+
+```
+
+
+Take a look at each area. There are so many beaches in FL and difficult to see them all. 
+
+```{r}
+p.FL <- ggplot(data = FL.nest.counts) +
+  geom_path(aes(x = year, y = log(nests),
+            color = factor(ID))) +
+  theme(legend.position = "none")
+  #facet_wrap( ~ factor(ID))
+
+p.FL
+
+```
+
+
+
+```{r}
+p.PR <- ggplot(data = PR.nest.counts) +
+  geom_path(aes(x = year, 
+                y = log(nests),
+                color = factor(ID)))+
+  theme(legend.position = "none")
+
+p.PR
+```
+
+
+
+```{r}
+p.STX <- ggplot(data = STX.nest.counts) +
+  geom_path(aes(x = year, y = log(nests)))
+
+p.STX
+```
+
+Try one dataset at a time. 
+
+For FL, we can fit the same model as the last publication with 3 covariates. 
+
+```{r}
+X.FL <- cbind(FL.nest.counts$distance - median(FL.nest.counts$distance),
+                FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+
+FL.nest.counts %>% 
+  group_by(ID2) %>%
+  summarise(n = n()) -> FL.ns
+
+FL.nest.counts %>% 
+  select(ID2, ID, latitude, beach_f, year) %>% 
+  group_by(ID) %>%
+  summarise(ID2 = first(ID2),
+            name = first(beach_f),
+            latitude = first(latitude)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2,
+         beach = ID,
+         ID2 = ID2,
+         name = name,
+         n = FL.ns$n) -> FL.lat.dat
+
+FL.jags.data <- list(N = length(FL.nest.counts$nests),
+                     nbeach = length(unique(FL.nest.counts$ID2)),
+                     count = FL.nest.counts$nests,
+                     beach = FL.nest.counts$ID2,
+                     yearc = FL.nest.counts$year - median(FL.nest.counts$year),
+                     X = X.FL,
+                     latc = FL.lat.dat$latc,
+                     latc2 = FL.lat.dat$latc2)
+```
+
+Run the model for FL
+
+```{r}
+
+parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
+                "delta1", "delta2",
+                "sigma.e", "Sigma.B",
+                "sigma.a0", "sigma.a1",
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred")
+
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")){
+  jm.FL <- jags(data = FL.jags.data,
+                #inits = inits,
+                parameters.to.save= parameters,
+                model.file = MCMC.params$model.file,
+                n.chains = MCMC.params$n.chains,
+                n.burnin = MCMC.params$n.burnin,
+                n.thin = MCMC.params$n.thin,
+                n.iter = MCMC.params$n.samples,
+                DIC = T, 
+                parallel=T)
+  
+  saveRDS(jm.FL, 
+          file = "RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
+  
+} else {
+  jm.FL <- readRDS("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
+}
+
+summary(jm.FL)
+```
+
+
+
+
+
+STX
+
+```{r}
+# The X matrix for STX is not useful because there is only one beach, except the number of days per year surveyed. 
+X.STX <- cbind(STX.nest.counts$distance - median(STX.nest.counts$distance),
+                STX.nest.counts$days_week - median(STX.nest.counts$days_week),
+                STX.nest.counts$days_year - median(STX.nest.counts$days_year))
+
+STX.jags.data <- list(N = length(STX.nest.counts$nests),
+                      nbeach = length(unique(STX.nest.counts$ID2)),
+                      count = STX.nest.counts$nests,
+                      beach = STX.nest.counts$ID2,
+                      yearc = (STX.nest.counts$year - median(STX.nest.counts$year)),
+                      X = X.STX)
+
+                      # latc = STX.lat.dat$latc,
+                      # latc2 = STX.lat.dat$latc2)
+
+
+```
+
+The original model doesn't work for just one beach. I can add STX and PR to the FL dataset and analyze them all at once. Or 
+Then run the model for STX. Note that some covariates in the original model are unavailable. I changed it. 
+
+```{r}
+parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
+                "delta1", "delta2",
+                "sigma.e", "Sigma.B",
+                "sigma.a0", "sigma.a1",
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred")
+
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
+
+
+
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")){
+  jm.2008 <- jags(data = jags.data.2008,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+  
+  saveRDS(jm.2008, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
+  
+} else {
+  jm.2008 <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
+}
+
+summary(jm.2008)
+```
+
+At least they converged fine! 
+
+Note that beach IDs are ID2, not the original ID numbers. So, we need to make sure right ones are used. 
+
+```{r}
+summary.2008.df <- data.frame(jm.2008$summary) %>%
+  rownames_to_column("Parameter")
+
+# find the beach-specific growth rate in percent
+#mcmc_trace(jm.MS$samples, pars = "a1pc[38]")
+
+summary.2008.df %>% filter(str_detect(Parameter, pattern = "a1pc")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_a1pc = mean,
+            sd_a1pc = sd,
+            low25_a1pc = X2.5.,
+            median_a1pc = X50.,
+            upper975_a1pc = X97.5.)-> a1pc.2008
+
+a1pc.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
+  arrange(latc) -> a1pc.2008
+
+summary.2008.df %>% 
+  filter(str_detect(Parameter, pattern = "mu.a1")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_mu.a1 = mean,
+            sd_mu.a1 = sd,
+            low25_mu.a1 = X2.5.,
+            median_mu.a1 = X50.,
+            upper975_mu.a1 = X97.5.)-> mu.a1.2008
+
+mu.a1.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
+  arrange(latc) -> mu.a1.2008
+
+#head(a1pc.2008)
+```
+
+
+Look at why a1pc.2008 is quite different from a1pc.new...
+
+Compare results visually...
+```{r}
+
+ggplot() + 
+  geom_point(data = a1pc, 
+             aes(x = beach, y = mean_a1pc),
+             color = "blue") + 
+  geom_errorbar(data = a1pc,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "blue") + 
+  geom_point(data = a1pc.new, 
+             aes(x = beach, y = mean_a1pc),
+             color = "red") + 
+  geom_errorbar(data = a1pc.new,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "red") + 
+  geom_point(data = a1pc.2008, 
+            aes(x = ID, y = mean_a1pc),
+            color = "green") + 
+  geom_errorbar(data = a1pc.2008,
+              aes(ymin = low25_a1pc,
+                  ymax = upper975_a1pc,
+                  x = ID),
+              color = "green")
+
+```

@@ -23,7 +23,6 @@ MCMC.params <- list(n.samples = 100000,
                     n.thin = 5,
                     n.chains = 5)
 
-
 ```
 
 Get data;
@@ -59,49 +58,14 @@ STX.nest.counts <- read_csv("data/STX_Sept2020.csv",
 
 ```
 
+Change in abundance over time at each beach can be seen in FL_PR_STX_v0_Sept2020.Rmd. 
 
-Take a look at each area. There are so many beaches in FL and difficult to see them all. 
-
-```{r}
-p.FL <- ggplot(data = FL.nest.counts) +
-  geom_path(aes(x = year, y = log(nests),
-            color = factor(ID))) +
-  theme(legend.position = "none")
-  #facet_wrap( ~ factor(ID))
-
-p.FL
-
-```
-
-
+For FL, we can fit the same models as the last publication. I use the same set of covariates but also test all possibilities of 3 covariates to see which set is the best.  
 
 ```{r}
-p.PR <- ggplot(data = PR.nest.counts) +
-  geom_path(aes(x = year, 
-                y = log(nests),
-                color = factor(ID)))+
-  theme(legend.position = "none")
-
-p.PR
-```
-
-
-
-```{r}
-p.STX <- ggplot(data = STX.nest.counts) +
-  geom_path(aes(x = year, y = log(nests)))
-
-p.STX
-```
-
-Try one dataset at a time. 
-
-For FL, we can fit the same model as the last publication with 3 covariates. 
-
-```{r}
-X.FL <- cbind(FL.nest.counts$distance - median(FL.nest.counts$distance),
-                FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+X.FL <- cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+              FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+              FL.nest.counts$days_year - median(FL.nest.counts$days_year))
 
 FL.nest.counts %>% 
   group_by(ID2) %>%
@@ -128,11 +92,6 @@ FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      X = X.FL,
                      latc = FL.lat.dat$latc,
                      latc2 = FL.lat.dat$latc2)
-```
-
-Run the model for FL
-
-```{r}
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "mu.a0", "mu.a1",
@@ -141,12 +100,12 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "sigma.e", "Sigma.B",
                 "sigma.a0", "sigma.a1",
                 "floridapc", "probP", "deviance",
-                "Devobs", "Devpred")
+                "Devobs", "Devpred", "loglik")
 
 MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")){
-  jm.FL <- jags(data = FL.jags.data,
+  jm.FL.3Covs <- jags(data = FL.jags.data,
                 #inits = inits,
                 parameters.to.save= parameters,
                 model.file = MCMC.params$model.file,
@@ -157,17 +116,259 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")){
                 DIC = T, 
                 parallel=T)
   
-  saveRDS(jm.FL, 
+  saveRDS(jm.FL.3Covs, 
           file = "RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
   
 } else {
-  jm.FL <- readRDS("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
+  jm.FL.3Covs <- readRDS("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
 }
 
-summary(jm.FL)
+summary(jm.FL.3Covs)
+```
+
+Converged okay. But let's take a look at some trace plots to make sure they look okay.
+
+
+```{r}
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_2Covs.txt"
+
+X.FL <- cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+              FL.nest.counts$days_week - median(FL.nest.counts$days_week))
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")){
+  jm.FL.2Covs_1 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.2Covs_1, 
+          file = "RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")
+  
+} else {
+  jm.FL.2Covs_1 <- readRDS("RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")
+}
+
+summary(jm.FL.2Covs_1)
 ```
 
 
+```{r}
+X.FL <- cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+              FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")){
+  jm.FL.2Covs_2 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.2Covs_2, 
+          file = "RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")
+  
+} else {
+  jm.FL.2Covs_2 <- readRDS("RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")
+}
+
+summary(jm.FL.2Covs_2)
+```
+
+
+```{r}
+X.FL <- cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+              FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")){
+  jm.FL.2Covs_3 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.2Covs_3, 
+          file = "RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")
+  
+} else {
+  jm.FL.2Covs_3 <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")
+}
+
+```
+
+
+One covariate models:
+
+```{r}
+X.FL <- log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance))
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_FL.rds")){
+  jm.FL.1Cov_1 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.1Cov_1, 
+          file = "RData/JAGS_out_rSlope_rInt_logD_FL.rds")
+  
+} else {
+  jm.FL.1Cov1_1 <- readRDS("RData/JAGS_out_rSlope_rInt_logD_FL.rds")
+}
+
+```
+
+
+```{r}
+X.FL <- FL.nest.counts$days_week - median(FL.nest.counts$days_week)
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")){
+  jm.FL.1Cov_2 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.1Cov_2, 
+          file = "RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
+  
+} else {
+  jm.FL.1Cov1_2 <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
+}
+
+```
+
+
+```{r}
+X.FL <- FL.nest.counts$days_year - median(FL.nest.counts$days_year)
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")){
+  jm.FL.1Cov_3 <- jags(data = FL.jags.data,
+                        #inits = inits,
+                        parameters.to.save= parameters,
+                        model.file = MCMC.params$model.file,
+                        n.chains = MCMC.params$n.chains,
+                        n.burnin = MCMC.params$n.burnin,
+                        n.thin = MCMC.params$n.thin,
+                        n.iter = MCMC.params$n.samples,
+                        DIC = T, 
+                        parallel=T)
+  
+  saveRDS(jm.FL.1Cov_3, 
+          file = "RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
+  
+} else {
+  jm.FL.1Cov1_3 <- readRDS("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
+}
+
+```
+
+
+Then... use LOOIC or DIC to compare these models. 
+
+START HERE 2020-09-09
+
+
+
+```{r}
+mcmc_trace(jm.FL$samples, c("beta[1]", "beta[2]", "beta[3]" ))
+```
+
+These look okay. 
+
+Take a look at the over-dispersion variance parameter.
+
+```{r}
+mcmc_dens(jm.FL$samples, pars = "sigma.e")
+```
+
+It's a little greater than 0, but not much... 
+
+Extract population growth parameters. 
+
+```{r}
+FL.summary.df <- data.frame(jm.FL$summary) %>%
+  rownames_to_column("Parameter")
+
+FL.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "a1pc")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_a1pc = mean,
+            sd_a1pc = sd,
+            low25_a1pc = X2.5.,
+            median_a1pc = X50.,
+            upper975_a1pc = X97.5.)-> FL.a1pc
+
+FL.a1pc %>% 
+  left_join(FL.lat.dat, by = "ID") %>%
+  arrange(latc) -> FL.a1pc
+
+FL.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "mu.a1")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_mu.a1 = mean,
+            sd_mu.a1 = sd,
+            low25_mu.a1 = X2.5.,
+            median_mu.a1 = X50.,
+            upper975_mu.a1 = X97.5.)-> FL.mu.a1
+
+FL.mu.a1 %>% left_join(FL.lat.dat, by = "ID") %>%
+  arrange(latc) -> FL.mu.a1
+
+#head(a1pc.2008)
+```
+
+
+Look at the beach specific annual growth rate in %:
+
+```{r}
+
+ggplot() + 
+  geom_point(data = FL.a1pc, 
+             aes(x = beach, y = mean_a1pc),
+             color = "blue") + 
+  geom_errorbar(data = FL.a1pc,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "blue") + 
+  ylab("Annual average growth rate (%) and 95% CI") + 
+  xlab("Beach ID")
+```
+
+Create a table with beach names:
+
+```{r}
+FL.a1pc %>% select(ID, name, mean_a1pc, sd_a1pc, low25_a1pc, upper975_a1pc) -> FL.table
+
+write_csv(FL.table, path = "data/FL_growth_rates_Sept2020.csv")
+```
 
 
 

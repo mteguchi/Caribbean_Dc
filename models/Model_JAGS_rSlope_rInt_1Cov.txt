@@ -4,7 +4,7 @@
 # adjusted model  - now computes residuals and computes bayesian p-value using deviance
 
 # converted to run in JAGS - TE
-# Random effects for slope and intercept and takes 3 covariates. 
+# Random effects for slope and intercept and takes 1 covariate. 
 
 # 2020-03-10
 
@@ -12,7 +12,7 @@ model{
 	for(i in 1:N){
 		count[i] ~ dpois(mu[i])
 		resid[i] <- count[i] - mu[i]  # computes residuals
-		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
+		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + epsilon[i]
 		
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
@@ -27,7 +27,6 @@ model{
 		loglikobs[i] <- count[i] * log(mu[i]) - mu[i] + logfact(count[i])       
 
 		loglik[i] <- logdensity.pois(count[i], mu[i])
-
 	}
 
 	Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value

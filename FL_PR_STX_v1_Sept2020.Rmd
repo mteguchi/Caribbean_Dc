@@ -102,6 +102,10 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
                 "floridapc", "probP", "deviance",
                 "Devobs", "Devpred", "loglik")
 
+```
+
+
+```{r}
 MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")){
@@ -124,6 +128,7 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")){
 }
 
 summary(jm.FL.3Covs)
+rm(jm.FL.3Covs)
 ```
 
 Converged okay. But let's take a look at some trace plots to make sure they look okay.
@@ -134,6 +139,8 @@ MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_2Covs.txt"
 
 X.FL <- cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
               FL.nest.counts$days_week - median(FL.nest.counts$days_week))
+
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")){
   jm.FL.2Covs_1 <- jags(data = FL.jags.data,
@@ -155,12 +162,15 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")){
 }
 
 summary(jm.FL.2Covs_1)
+rm(jm.FL.2Covs_1)
 ```
 
 
 ```{r}
 X.FL <- cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
               FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")){
   jm.FL.2Covs_2 <- jags(data = FL.jags.data,
@@ -182,12 +192,15 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")){
 }
 
 summary(jm.FL.2Covs_2)
+rm(jm.FL.2Covs_2)
 ```
 
 
 ```{r}
 X.FL <- cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
               FL.nest.counts$days_year - median(FL.nest.counts$days_year))
+
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")){
   jm.FL.2Covs_3 <- jags(data = FL.jags.data,
@@ -208,6 +221,8 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")){
   jm.FL.2Covs_3 <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")
 }
 
+summary(jm.FL.2Covs_3)
+rm(jm.FL.2Covs_3)
 ```
 
 
@@ -215,6 +230,10 @@ One covariate models:
 
 ```{r}
 X.FL <- log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance))
+
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_1Cov.txt"
+
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_FL.rds")){
   jm.FL.1Cov_1 <- jags(data = FL.jags.data,
@@ -232,14 +251,17 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_logD_FL.rds")){
           file = "RData/JAGS_out_rSlope_rInt_logD_FL.rds")
   
 } else {
-  jm.FL.1Cov1_1 <- readRDS("RData/JAGS_out_rSlope_rInt_logD_FL.rds")
+  jm.FL.1Cov_1 <- readRDS("RData/JAGS_out_rSlope_rInt_logD_FL.rds")
 }
 
+summary(jm.FL.1Cov_1)
+rm(jm.FL.1Cov_1)
 ```
 
 
 ```{r}
 X.FL <- FL.nest.counts$days_week - median(FL.nest.counts$days_week)
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")){
   jm.FL.1Cov_2 <- jags(data = FL.jags.data,
@@ -257,14 +279,17 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")){
           file = "RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
   
 } else {
-  jm.FL.1Cov1_2 <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
+  jm.FL.1Cov_2 <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
 }
 
+summary(jm.FL.1Cov_2)
+rm(jm.FL.1Cov_2)
 ```
 
 
 ```{r}
 X.FL <- FL.nest.counts$days_year - median(FL.nest.counts$days_year)
+FL.jags.data$X <- X.FL
 
 if (!file.exists("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")){
   jm.FL.1Cov_3 <- jags(data = FL.jags.data,
@@ -282,15 +307,112 @@ if (!file.exists("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")){
           file = "RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
   
 } else {
-  jm.FL.1Cov1_3 <- readRDS("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
+  jm.FL.1Cov_3 <- readRDS("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
 }
+
+summary(jm.FL.1Cov_3)
+rm(jm.FL.1Cov_3)
 
 ```
 
 
+```{r}
+FL.jags.data <- list(N = length(FL.nest.counts$nests),
+                     nbeach = length(unique(FL.nest.counts$ID2)),
+                     count = FL.nest.counts$nests,
+                     beach = FL.nest.counts$ID2,
+                     yearc = FL.nest.counts$year - median(FL.nest.counts$year),
+                     latc = FL.lat.dat$latc,
+                     latc2 = FL.lat.dat$latc2)
+
+parameters <- c("a0", "a1", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
+                "delta1", "delta2",
+                "sigma.e", "Sigma.B",
+                "sigma.a0", "sigma.a1",
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred", "loglik")
+
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt.txt"
+
+if (!file.exists("RData/JAGS_out_rSlope_rInt_FL.rds")){
+  jm.FL.0Cov <- jags(data = FL.jags.data,
+                     #inits = inits,
+                     parameters.to.save= parameters,
+                     model.file = MCMC.params$model.file,
+                     n.chains = MCMC.params$n.chains,
+                     n.burnin = MCMC.params$n.burnin,
+                     n.thin = MCMC.params$n.thin,
+                     n.iter = MCMC.params$n.samples,
+                     DIC = T, 
+                     parallel=T)
+  
+  saveRDS(jm.FL.0Cov, 
+          file = "RData/JAGS_out_rSlope_rInt_FL.rds")
+  
+} else {
+  jm.FL.0Cov <- readRDS("RData/JAGS_out_rSlope_rInt_FL.rds")
+}
+
+summary(jm.FL.0Cov)
+
+rm(jm.FL.0Cov)
+```
+
 Then... use LOOIC or DIC to compare these models. 
 
-START HERE 2020-09-09
+```{r}
+source("Caribbean_Dc_fcns.R")
+n.per.chain <- (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin
+
+data.vector <- FL.jags.data$count %>% 
+  rep(each = MCMC.params$n.chains * n.per.chain)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_3Covs_FL.rds")
+loo.out.jm.3Covs <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                  data.vector = data.vector, 
+                                  MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_logD_DayWk_FL.rds")
+loo.out.jm.2Covs_1 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                    data.vector = data.vector, 
+                                    MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_logD_DayYr_FL.rds")
+loo.out.jm.2Covs_2 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                    data.vector = data.vector, 
+                                    MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_DayYr_FL.rds")
+loo.out.jm.2Covs_3 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                    data.vector = data.vector, 
+                                    MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_logD_FL.rds")
+loo.out.jm.1Cov_1 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                   data.vector = data.vector, 
+                                   MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_DayWk_FL.rds")
+loo.out.jm.1Cov_2 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                   data.vector = data.vector, 
+                                   MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_DayYr_FL.rds")
+loo.out.jm.1Cov_3 <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                   data.vector = data.vector, 
+                                   MCMC.params = MCMC.params)
+
+tmp <- readRDS("RData/JAGS_out_rSlope_rInt_FL.rds")
+loo.out.jm.0Cov <- compute.LOOIC(loglik = tmp$sims.list$loglik, 
+                                 data.vector = data.vector, 
+                                 MCMC.params = MCMC.params)
+
+```
+
+
+START HERE 2020-09-10
 
 
 

@@ -91,11 +91,16 @@ median.yr <- select(FL.lat.dat, c(ID, median.yr, min.yr)) %>%
   right_join(FL.nest.counts, by = "ID") %>% 
   select(ID, median.yr, min.yr, year)
 
+# changed from centering to left-adjusted for years. I think t >= 0 makes more
+# sense explaining the intercept than centering time. With t >= 0, it is the 
+# log(mu) at time 0 for each beach, whereas if time is centered, it is log(mu) at
+# some arbitrary year for each beach. 
+
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
                      count = FL.nest.counts$nests,
                      beach = FL.nest.counts$ID2,
-                     yearc = FL.nest.counts$year - median(FL.nest.counts$year),
+                     yearc = median.yr$year - median.yr$min.yr,
                      latc = FL.lat.dat$latc,
                      latc2 = FL.lat.dat$latc2)
 
@@ -118,15 +123,15 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
 model.names <- c("3Covs", rep("2Covs", times = 3), rep("1Cov", times = 3), "0Cov")
 out.names <- c("3Covs", "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
                "logD", "DayWk", "DayYr", "0Cov") 
-X.FL <- c(cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-              FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-              FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+X.FL <- list(cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
           cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-              FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
+                FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
           cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-              FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
           cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-              FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
           log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
           FL.nest.counts$days_week - median(FL.nest.counts$days_week),
           FL.nest.counts$days_year - median(FL.nest.counts$days_year),
@@ -194,7 +199,7 @@ loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
       rownames_to_column(var = "Statistic")})
 
 looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
-
+unlist(looic).ou
 ```
 
 
@@ -218,16 +223,60 @@ FL.paretok.data <- data.frame(beach = FL.jags.data$beach,
 
 ggplot(data = FL.paretok.data) +
   geom_point(aes(x = beach, 
-                 y = year, 
+                 y = yearc, 
                  color = pareto_k)) +
   scale_color_continuous(type = "viridis")
 ```
 
 Some beaches are not good throughout their data, whereas others are okay... This means that we may need a different model to accommodate all... 
 
-START HERE 2020-09-11
+Take a look at residuals
+```{r}
+jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[1], "_FL.rds"))
 
-WHY DO WE WANT TO CENTER YEAR? IF WE HAVE RANDOM SLOPE AND INTERCEPT, WOULDN'T IT MAKE MORE SENSE TO HAVE MINIMUM YEAR SUBTRACTED SO THAT THE FIRST YEAR IS ZERO, WHICH WILL BE THE INTERCEPT, NO? LOOK INTO THAT - CHECK THE MODEL AGAIN TO SEE WHAT MAKES MORE SENSE. 
+summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Parameter")
+
+# regular expression - ^a0 means the beginning of a string has to be a0
+# \\[ are the escape characters for [, which is a reserved character. 
+# ([0-9]+) means numbers 
+# \\] also to literal ]
+summary.a0.df <- summary.df[grep(pattern = "^a0\\[([0-9]+)\\]", x = summary.df$Parameter),]
+summary.a1.df <- summary.df[grep(pattern = "^a1\\[([0-9]+)\\]", x = summary.df$Parameter),]
+
+grep(pattern = ".+\\[([0-9]+)\\].+?$", x = summary.df$Parameter)
+summary.beta1.df <- summary.df[grep(pattern = "beta[1]", x = summary.df$Parameter, fixed = TRUE),]
+summary.beta2.df <- summary.df[grep(pattern = "beta[2]", x = summary.df$Parameter, fixed = TRUE),]
+summary.beta3.df <- summary.df[grep(pattern = "beta[3]", x = summary.df$Parameter, fixed = TRUE),]
+
+resid <- log.mu <- vector(mode = "numeric", length = length(FL.jags.data$count))
+beach <- FL.jags.data$beach
+yearc <- FL.jags.data$yearc
+X <- X.FL[[1]]
+for (i in 1:length(FL.jags.data$count)){
+  log.mu[i] <- summary.a0.df[beach[i], "mean"] + 
+    summary.a1.df[beach[i], "mean"] * yearc[i] + 
+    summary.beta1.df[1, "mean"] * X[i,1] + 
+    summary.beta2.df[1, "mean"] * X[i,2] + 
+    summary.beta3.df[1, "mean"] * X[i,3]
+  
+  resid[i] <- FL.jags.data$count[i] - exp(log.mu[i])
+}
+
+FL.paretok.data$residual <- resid
+
+# remove pareto_k < 0.7 because they are okay.
+
+FL.paretok.data %>% filter(pareto_k > 0.7) -> FL.paretok.data.2
+ggplot(data = FL.paretok.data.2) +
+  geom_point(aes(x = beach, 
+                 y = yearc,
+                 color = abs(residual)))+
+  scale_color_continuous(type = "viridis")
+
+```
+
+
+START HERE 2020-09-11
 
 ```{r}
 mcmc_trace(jm.FL$samples, c("beta[1]", "beta[2]", "beta[3]" ))

@@ -77,13 +77,19 @@ FL.nest.counts %>%
   group_by(ID) %>%
   summarise(ID2 = first(ID2),
             name = first(beach_f),
-            latitude = first(latitude)) %>%
+            latitude = first(latitude),
+            median.yr = median(year),
+            min.yr = min(year),
+            n = n()) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2,
          beach = ID,
          ID2 = ID2,
-         name = name,
-         n = FL.ns$n) -> FL.lat.dat
+         name = name) -> FL.lat.dat
+
+median.yr <- select(FL.lat.dat, c(ID, median.yr, min.yr)) %>%
+  right_join(FL.nest.counts, by = "ID") %>% 
+  select(ID, median.yr, min.yr, year)
 
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
@@ -207,19 +213,21 @@ idx.bad.looic <- loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7
 FL.paretok.data <- data.frame(beach = FL.jags.data$beach,
                             count = FL.jags.data$count,
                             yearc = FL.jags.data$yearc,
+                            year = FL.nest.counts$year,
                             pareto_k = loo.out[[1]]$loo.out$diagnostics$pareto_k)
 
 ggplot(data = FL.paretok.data) +
   geom_point(aes(x = beach, 
-                 y = yearc, 
+                 y = year, 
                  color = pareto_k)) +
   scale_color_continuous(type = "viridis")
 ```
 
+Some beaches are not good throughout their data, whereas others are okay... This means that we may need a different model to accommodate all... 
 
-START HERE 2020-09-10
+START HERE 2020-09-11
 
-
+WHY DO WE WANT TO CENTER YEAR? IF WE HAVE RANDOM SLOPE AND INTERCEPT, WOULDN'T IT MAKE MORE SENSE TO HAVE MINIMUM YEAR SUBTRACTED SO THAT THE FIRST YEAR IS ZERO, WHICH WILL BE THE INTERCEPT, NO? LOOK INTO THAT - CHECK THE MODEL AGAIN TO SEE WHAT MAKES MORE SENSE. 
 
 ```{r}
 mcmc_trace(jm.FL$samples, c("beta[1]", "beta[2]", "beta[3]" ))

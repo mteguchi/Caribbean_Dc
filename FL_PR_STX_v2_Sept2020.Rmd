@@ -6,6 +6,8 @@ output: html_notebook
 
 Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
 
+In this version (v2), I use the negative binomial distribution intead of Poisson because Poisson resulted in high Pareto k statistics for some beaches in FL. Negative binomial distribution should be a bit more flexible than Poisson. We'll see how it works... 
+
 New data were received in August 2020. 
 
 ```{r}
@@ -108,13 +110,12 @@ data.vector <- FL.jags.data$count %>%
   rep(each = MCMC.params$n.chains * n.per.chain)
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
-                "mu.a0", "mu.a1",
+                "mu.a0", "mu.a1", "r",
                 "rea0", "rea1",
                 "delta1", "delta2",
                 "sigma.e", "Sigma.B",
                 "sigma.a0", "sigma.a1",
-                "floridapc", "probP", "deviance",
-                "Devobs", "Devpred", "loglik")
+                "floridapc", "probP", "deviance", "loglik")
 
 ```
 
@@ -141,11 +142,12 @@ X.FL <- list(cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$dist
 loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
 
-for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_rSlope_rInt_", model.names[k], ".txt")
+#length(out.names)
+for (k in 1:1){
+  MCMC.params$model.file = paste0("models/Model_JAGS_negbin_rSlope_rInt_", model.names[k], ".txt")
   FL.jags.data$X <- X.FL[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))){
     jm <- jags(data = FL.jags.data,
                #inits = inits,
                parameters.to.save= parameters,
@@ -158,23 +160,23 @@ for (k in 1:length(out.names)){
                parallel=T)
     
     saveRDS(jm, 
-            file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
     
   } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))
+    jm <- readRDS(file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
   }
 
   Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
   
-  if (!file.exists(paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
                                   data.vector = data.vector, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
     
   } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
   }
   
 }
@@ -189,7 +191,12 @@ Look at the convergence using Rhat statistic:
 Rmax
 ```
 
-Looks like all parameters/models converged fine.
+They didn't converge... 
+
+```{r}
+
+```
+
 
 Then... use LOOIC or DIC to compare these models. 
 
@@ -232,8 +239,7 @@ Some beaches are not good throughout their data, whereas others are okay... This
 
 Take a look at residuals
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", 
-                            out.names[which(unlist(looic) == min(unlist(looic)))], "_FL.rds"))
+jm <- readRDS(file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[1], "_FL.rds"))
 
 summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Parameter")
 
@@ -306,11 +312,10 @@ There is no particular pattern between Pareto k and observed count or estimated 
 
 How can I make the model more flexible? 
 
-I tried the negative binomial distribution in a couple ways instead of Poisson but it didn't work as expected. I might have used the distribution incorrectly. Kelly wanted to use the same model as before so let's move on for now. 
-
+START HERE 2020-09-11
 
 ```{r}
-mcmc_trace(jm$samples, c("beta[1]", "beta[2]", "beta[3]" ))
+mcmc_trace(jm.FL$samples, c("beta[1]", "beta[2]", "beta[3]" ))
 ```
 
 These look okay. 
@@ -318,20 +323,20 @@ These look okay.
 Take a look at the over-dispersion variance parameter.
 
 ```{r}
-mcmc_dens(jm$samples, pars = "sigma.e")
+mcmc_dens(jm.FL$samples, pars = "sigma.e")
 ```
 
-It's a little greater than 0, but not much... So, we can ignore overdispersion?
+It's a little greater than 0, but not much... 
 
 Extract population growth parameters. 
 
 ```{r}
-FL.summary.df <- data.frame(jm$summary) %>%
+FL.summary.df <- data.frame(jm.FL$summary) %>%
   rownames_to_column("Parameter")
 
 FL.summary.df %>% 
   filter(str_detect(Parameter, pattern = "a1pc")) %>%
-  rownames_to_column("beach") %>% #-> tmp #
+  rownames_to_column("beach") %>%
   transmute(ID = as.numeric(beach),
             mean_a1pc = mean,
             sd_a1pc = sd,
@@ -341,7 +346,7 @@ FL.summary.df %>%
 
 FL.a1pc %>% 
   left_join(FL.lat.dat, by = "ID") %>%
-  arrange(ID) -> FL.a1pc
+  arrange(latc) -> FL.a1pc
 
 FL.summary.df %>% 
   filter(str_detect(Parameter, pattern = "mu.a1")) %>%
@@ -354,7 +359,7 @@ FL.summary.df %>%
             upper975_mu.a1 = X97.5.)-> FL.mu.a1
 
 FL.mu.a1 %>% left_join(FL.lat.dat, by = "ID") %>%
-  arrange(ID) -> FL.mu.a1
+  arrange(latc) -> FL.mu.a1
 
 #head(a1pc.2008)
 ```
@@ -366,13 +371,13 @@ Look at the beach specific annual growth rate in %:
 
 ggplot() + 
   geom_point(data = FL.a1pc, 
-             aes(x = beach, y = mean_a1pc,
-             color = latc)) + 
+             aes(x = beach, y = mean_a1pc),
+             color = "blue") + 
   geom_errorbar(data = FL.a1pc,
                 aes(ymin = low25_a1pc,
                     ymax = upper975_a1pc,
-                    x = beach,
-                    color = latc)) + 
+                    x = beach),
+                color = "blue") + 
   ylab("Annual average growth rate (%) and 95% CI") + 
   xlab("Beach ID")
 ```
@@ -390,99 +395,131 @@ write_csv(FL.table, path = "data/FL_growth_rates_Sept2020.csv")
 STX
 
 ```{r}
-STX.nest.counts %>% 
-  group_by(ID2) %>%
-  summarise(n = n()) -> STX.ns
-
-STX.nest.counts %>% 
-  select(ID2, ID, beach_f, year) %>% 
-  group_by(ID) %>%
-  summarise(ID2 = first(ID2),
-            name = first(beach_f),
-            median.yr = median(year),
-            min.yr = min(year),
-            n = n()) %>%
-  mutate(beach = ID,
-         ID2 = ID2,
-         name = name) -> STX.lat.dat
-
-median.yr <- select(STX.lat.dat, c(ID, median.yr, min.yr)) %>%
-  right_join(STX.nest.counts, by = "ID") %>% 
-  select(ID, median.yr, min.yr, year)
-
-# changed from centering to left-adjusted for years. I think t >= 0 makes more
-# sense explaining the intercept than centering time. With t >= 0, it is the 
-# log(mu) at time 0 for each beach, whereas if time is centered, it is log(mu) at
-# some arbitrary year for each beach. 
+# The X matrix for STX is not useful because there is only one beach, except the number of days per year surveyed. 
+X.STX <- cbind(STX.nest.counts$distance - median(STX.nest.counts$distance),
+                STX.nest.counts$days_week - median(STX.nest.counts$days_week),
+                STX.nest.counts$days_year - median(STX.nest.counts$days_year))
 
 STX.jags.data <- list(N = length(STX.nest.counts$nests),
                       nbeach = length(unique(STX.nest.counts$ID2)),
                       count = STX.nest.counts$nests,
                       beach = STX.nest.counts$ID2,
-                      yearc = median.yr$year - median.yr$min.yr)
+                      yearc = (STX.nest.counts$year - median(STX.nest.counts$year)),
+                      X = X.STX)
 
-data.vector <- STX.jags.data$count %>% 
-  rep(each = MCMC.params$n.chains * n.per.chain)
+                      # latc = STX.lat.dat$latc,
+                      # latc2 = STX.lat.dat$latc2)
 
-parameters <- c("a0", "a1", "a2", "beta", 
-                "sigma.e", "deviance",
-                "Devobs", "Devpred", "loglik")
 
 ```
 
+The original model doesn't work for just one beach. I can add STX and PR to the FL dataset and analyze them all at once. Or 
+Then run the model for STX. Note that some covariates in the original model are unavailable. I changed it. 
 
 ```{r}
-# sampling happens every day so Days of week are constant 
-model.names <- c("1Cov", "0Cov")
-out.names <- c("DayYr", "0Cov") 
-X.STX <- list(STX.nest.counts$days_year - median(STX.nest.counts$days_year),
-              0)
+parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
+                "delta1", "delta2",
+                "sigma.e", "Sigma.B",
+                "sigma.a0", "sigma.a1",
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred")
 
-#jm <- list(length = length(out.names))
-loo.out <- list()
-Rmax <- vector(mode = "numeric", length = length(out.names))
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
 
-for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_rSlope_rInt_", model.names[k], "_NoLat.txt")
-  STX.jags.data$X <- X.STX[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))){
-    jm <- jags(data = STX.jags.data,
-               #inits = inits,
-               parameters.to.save= parameters,
-               model.file = MCMC.params$model.file,
-               n.chains = MCMC.params$n.chains,
-               n.burnin = MCMC.params$n.burnin,
-               n.thin = MCMC.params$n.thin,
-               n.iter = MCMC.params$n.samples,
-               DIC = T, 
-               parallel=T)
-    
-    saveRDS(jm, 
-            file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))
-    
-  } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))
-  }
 
-  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")){
+  jm.2008 <- jags(data = jags.data.2008,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
   
-  if (!file.exists(paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))){
-    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
-                                  data.vector = data.vector, 
-                                  MCMC.params = MCMC.params)
-    saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))
-    
-  } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_NoLat_STX.rds"))
-  }
+  saveRDS(jm.2008, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
   
+} else {
+  jm.2008 <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_2008.rds")
 }
 
-
+summary(jm.2008)
 ```
-
 
 At least they converged fine! 
 
+Note that beach IDs are ID2, not the original ID numbers. So, we need to make sure right ones are used. 
+
+```{r}
+summary.2008.df <- data.frame(jm.2008$summary) %>%
+  rownames_to_column("Parameter")
+
+# find the beach-specific growth rate in percent
+#mcmc_trace(jm.MS$samples, pars = "a1pc[38]")
+
+summary.2008.df %>% filter(str_detect(Parameter, pattern = "a1pc")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_a1pc = mean,
+            sd_a1pc = sd,
+            low25_a1pc = X2.5.,
+            median_a1pc = X50.,
+            upper975_a1pc = X97.5.)-> a1pc.2008
+
+a1pc.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
+  arrange(latc) -> a1pc.2008
+
+summary.2008.df %>% 
+  filter(str_detect(Parameter, pattern = "mu.a1")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_mu.a1 = mean,
+            sd_mu.a1 = sd,
+            low25_mu.a1 = X2.5.,
+            median_mu.a1 = X50.,
+            upper975_mu.a1 = X97.5.)-> mu.a1.2008
+
+mu.a1.2008 %>% left_join(lat.dat.2008, by = "ID") %>%
+  arrange(latc) -> mu.a1.2008
+
+#head(a1pc.2008)
+```
+
+
+Look at why a1pc.2008 is quite different from a1pc.new...
+
+Compare results visually...
+```{r}
+
+ggplot() + 
+  geom_point(data = a1pc, 
+             aes(x = beach, y = mean_a1pc),
+             color = "blue") + 
+  geom_errorbar(data = a1pc,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "blue") + 
+  geom_point(data = a1pc.new, 
+             aes(x = beach, y = mean_a1pc),
+             color = "red") + 
+  geom_errorbar(data = a1pc.new,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "red") + 
+  geom_point(data = a1pc.2008, 
+            aes(x = ID, y = mean_a1pc),
+            color = "green") + 
+  geom_errorbar(data = a1pc.2008,
+              aes(ymin = low25_a1pc,
+                  ymax = upper975_a1pc,
+                  x = ID),
+              color = "green")
+
+```

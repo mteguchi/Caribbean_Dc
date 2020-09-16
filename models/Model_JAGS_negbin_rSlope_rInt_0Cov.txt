@@ -22,15 +22,15 @@ model{
 		epsilon[i] ~ dnorm(0, tau.e)    
 
 		# goodness of fit
-		countpred[i] ~ dpois(mu[i])    # obtain predicted values
+		#countpred[i] ~ dpois(mu[i])    # obtain predicted values
 		
 		# log likelihood of predicted 
-		loglikpre[i] <- countpred[i] * log(mu[i]) - mu[i] + logfact(countpred[i])   
+		#loglikpre[i] <- countpred[i] * log(mu[i]) - mu[i] + logfact(countpred[i])   
 		
 		# log likelihood of observed values
-		loglikobs[i] <- count[i] * log(mu[i]) - mu[i] + logfact(count[i])       
+		#loglikobs[i] <- count[i] * log(mu[i]) - mu[i] + logfact(count[i])       
 
-		loglik[i] <- logdensity.pois(count[i], mu[i])
+		loglik[i] <- logdensity.negbin(count[i], p[i], r)
 	}
 
 	r ~ dgamma(5, 0.1)

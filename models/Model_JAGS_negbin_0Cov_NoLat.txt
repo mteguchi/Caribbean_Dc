@@ -1,0 +1,35 @@
+# Original model by Michelle Sims:
+# Model 2: Model with random effects for slope and intercept and latitude quadratic plus 
+# overdispersion - this time I did log distance
+# adjusted model  - now computes residuals and computes bayesian p-value using deviance
+
+# converted to run in JAGS - TE
+# Random effects for slope and intercept and takes no covariate. 
+
+# 2020-03-10
+# 2020-09-10 Modified to make it without covariates
+# 2020-09-17 Poisson to negative binomial
+
+model{
+	for(i in 1:N){
+		count[i] ~ dnegbin(p[i], r)
+
+		logit(p[i]) <- a0 + a1 * yearc[i] + epsilon[i]
+		
+		#p[i] <- r/(mu[i] + r)
+		#log(mu[i]) <- a0 + a1 * yearc[i] + epsilon[i]
+		
+		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
+		epsilon[i] ~ dnorm(0, tau.e)    
+
+		loglik[i] <- logdensity.negbin(count[i], p[i], r)
+	}
+
+	a0 ~ dnorm(0, 0.01)
+	a1 ~ dnorm(0, 0.01)
+	#a2 ~ dnorm(0, 0.01)
+	r ~ dgamma(2, 0.5)
+
+	tau.e <- pow(sigma.e, -2)
+	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
+}

@@ -1,0 +1,37 @@
+# Original model by Michelle Sims:
+# Model 2: Model with random effects for slope and intercept and latitude quadratic plus 
+# overdispersion - this time I did log distance
+# adjusted model  - now computes residuals and computes bayesian p-value using deviance
+
+# converted to run in JAGS - TE
+# Random effects for slope and intercept and takes no covariate. 
+
+# 2020-03-10
+# 2020-09-10 Modified to make it without covariates
+
+model{
+	for(i in 1:N){
+		count[i] ~ dpois(mu[i])
+		log(mu[i]) <- ifelse(yearc[i] < year.change,
+							a0.1 + a1.1 * yearc[i] + epsilon[i],
+							a0.2 + a1.2 * yearc[i] + epsilon[i])
+		
+		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
+		epsilon[i] ~ dnorm(0, tau.e)    
+
+		loglik[i] <- logdensity.pois(count[i], mu[i])
+	}
+
+	a0.1 ~ dnorm(0, 0.01)
+	a0.2 ~ dnorm(0, 0.01)
+	
+	a1.1 ~ dnorm(0, 0.01)I(0,)
+	a1.2 ~ dnorm(0, 0.01)I(,0)
+	
+	year.change ~ dunif(minT, maxT)
+
+	#a2 ~ dnorm(0, 0.01)
+
+	tau.e <- pow(sigma.e, -2)
+	sigma.e ~ dgamma(2, 0.1) #dunif(0, 100)
+}

@@ -187,7 +187,7 @@ for (k in 1:length(out.names)){
   
   if (!file.exists(paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
-                                  data.vector = data.vector, 
+                                  data.vector = FL.jags.data$count, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
             file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))

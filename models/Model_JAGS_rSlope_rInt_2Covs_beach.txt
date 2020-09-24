@@ -52,12 +52,9 @@ model{
 		rea1[j] <- a1[j] - mu.a1[j]
 		for(k in 1:3){
 			beta[j,k] ~ dnorm(0, 0.01)
+			effpc[j, k] <- (exp(beta[j,k])-1) * 100
 		}
 
-	}
-
-	for(k in 1:3){
-		effpc[k] <- (exp(beta[k])-1) * 100
 	}
 
 	delta1 ~ dnorm(0, 0.01)

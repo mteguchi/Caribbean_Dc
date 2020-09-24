@@ -20,8 +20,8 @@ library(stringr)
 
 source("Caribbean_Dc_fcns.R")
 
-MCMC.params <- list(n.samples = 50000,
-                    n.burnin = 30000,
+MCMC.params <- list(n.samples = 75000,
+                    n.burnin = 55000,
                     n.thin = 5,
                     n.chains = 5)
 
@@ -108,7 +108,7 @@ data.vector <- FL.jags.data$count %>%
   rep(each = MCMC.params$n.chains * n.per.chain)
 
 parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
-                "mu.a0", "mu.a1",
+                "mu.a0", "mu.a1", "mu",
                 "rea0", "rea1",
                 "delta1", "delta2",
                 "sigma.e", "Sigma.B",
@@ -120,22 +120,41 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
 
 
 ```{r}
-model.names <- c("3Covs", rep("2Covs", times = 3), rep("1Cov", times = 3), "0Cov")
-out.names <- c("3Covs", "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
-               "logD", "DayWk", "DayYr", "0Cov") 
+model.names <- c("3Covs", "3Covs_beach", 
+                 rep("2Covs", times = 3),
+                 rep("2Covs_beach", times = 3),
+                 rep("1Cov", times = 3),
+                 rep("1Cov_beach", times = 3),"0Cov")
+out.names <- c("3Covs", "3Covs_beach", 
+               "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
+               "logD_DayWk_beach", "logD_DayYr_beach", "DayWk_DayYr_beach",
+               "logD", "DayWk", "DayYr", 
+               "logD_beach", "DayWk_beach", "DayYr_beach", "0Cov") 
 X.FL <- list(cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-          cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
-          cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-          cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-          log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-          FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-          FL.nest.counts$days_year - median(FL.nest.counts$days_year),
-          0)
+                   FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
+             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
+             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
+             log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+             FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+             FL.nest.counts$days_year - median(FL.nest.counts$days_year),
+             log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
+             FL.nest.counts$days_week - median(FL.nest.counts$days_week),
+             FL.nest.counts$days_year - median(FL.nest.counts$days_year),
+             0)
 
 #jm <- list(length = length(out.names))
 loo.out <- list()
@@ -189,7 +208,7 @@ Look at the convergence using Rhat statistic:
 Rmax
 ```
 
-Looks like all parameters/models converged fine.
+Looks like some parameters/models converged fine. Those with beach-specific betas didn't converge well. 
 
 Then... use LOOIC or DIC to compare these models. 
 
@@ -245,7 +264,12 @@ summary.a0.df <- summary.df[grep(pattern = "^a0\\[([0-9]+)\\]", x = summary.df$P
   rownames_to_column("beach") %>% mutate(ID = as.numeric(beach))
 summary.a1.df <- summary.df[grep(pattern = "^a1\\[([0-9]+)\\]", x = summary.df$Parameter),]
 
-grep(pattern = ".+\\[([0-9]+)\\].+?$", x = summary.df$Parameter)
+#grep(pattern = ".+\\[([0-9]+)\\].+?$", x = summary.df$Parameter)
+
+summary.mu.df <- summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
+                                 x = summary.df$Parameter),] %>%
+  mutate(beach = FL.jags.data$beach)
+
 summary.beta1.df <- summary.df[grep(pattern = "beta[1]", x = summary.df$Parameter, fixed = TRUE),]
 summary.beta2.df <- summary.df[grep(pattern = "beta[2]", x = summary.df$Parameter, fixed = TRUE),]
 summary.beta3.df <- summary.df[grep(pattern = "beta[3]", x = summary.df$Parameter, fixed = TRUE),]
@@ -388,29 +412,59 @@ FL.a1pc %>% select(ID, name, mean_a1pc, sd_a1pc, low25_a1pc, upper975_a1pc) -> F
 
 Visualize FL output to see if they make sense.
 
+<!-- ```{r} -->
+<!-- # For each beach, extract data, plot, then overlay predicted growth. -->
+
+<!-- beta.1 <- summary.beta1.df$mean -->
+<!-- beta.2 <- summary.beta2.df$mean -->
+<!-- beta.3 <- summary.beta3.df$mean -->
+<!-- Beta <- c(beta.1, beta.2, beta.3) -->
+<!-- k <- 3 -->
+<!-- for (k in 1:FL.jags.data$nbeach){ -->
+<!--   tmp <- FL.nest.counts %>% filter(ID == k) -->
+<!--   # slope -->
+<!--   a1.tmp <- FL.mu.a1 %>% filter(ID == k) %>% select(mean_mu.a1)  -->
+<!--   # intercept -->
+<!--   a0.tmp <- summary.a0.df %>% filter(ID == k) %>% select(mean) -->
+<!--   # covariates -->
+<!--   X.tmp <- X[FL.nest.counts$ID == k,] -->
+<!--   # years -->
+<!--   yr.tmp <- tmp$year - min(tmp$year) -->
+<!--   mu.tmp <- exp(rep(unlist(a0.tmp), length(yr.tmp)) +  -->
+<!--     yr.tmp * rep(unlist(a1.tmp), length(yr.tmp)) +  -->
+<!--     X.tmp %*% Beta) -->
+
+<!--   tmp$mu <- mu.tmp -->
+<!--   ggplot(data = tmp) + -->
+<!--     geom_point(aes(x = year, y = nests)) +  -->
+<!--     geom_path(aes(x = year, y = mu)) + -->
+<!--     labs(title = tmp$beach[1]) +  -->
+<!--     ylab("# nests") + xlab("") -->
+
+<!--   beach.name <- str_replace(tmp$beach[1], "/", "_") -->
+
+
+<!--   ggsave(filename = paste0("figures/", beach.name, ".png"), -->
+<!--          device = "png", dpi = 600) -->
+<!-- } -->
+
+
+<!-- ``` -->
+
+Or use the estimated mu directly:
+
 ```{r}
+
 # For each beach, extract data, plot, then overlay predicted growth.
 
-beta.1 <- summary.beta1.df$mean
-beta.2 <- summary.beta2.df$mean
-beta.3 <- summary.beta3.df$mean
-Beta <- c(beta.1, beta.2, beta.3)
 k <- 3
 for (k in 1:FL.jags.data$nbeach){
   tmp <- FL.nest.counts %>% filter(ID == k)
-  # slope
-  a1.tmp <- FL.mu.a1 %>% filter(ID == k) %>% select(mean_mu.a1) 
-  # intercept
-  a0.tmp <- summary.a0.df %>% filter(ID == k) %>% select(mean)
-  # covariates
-  X.tmp <- X[FL.nest.counts$ID == k,]
-  # years
-  yr.tmp <- tmp$year - min(tmp$year)
-  mu.tmp <- exp(rep(unlist(a0.tmp), length(yr.tmp)) + 
-    yr.tmp * rep(unlist(a1.tmp), length(yr.tmp)) + 
-    X.tmp %*% Beta)
-  
-  tmp$mu <- mu.tmp
+
+  summary.mu.df %>% filter(beach == k) %>% 
+    select(mean) -> mu.tmp
+    
+  tmp$mu <- mu.tmp$mean
   ggplot(data = tmp) +
     geom_point(aes(x = year, y = nests)) + 
     geom_path(aes(x = year, y = mu)) +
@@ -419,11 +473,12 @@ for (k in 1:FL.jags.data$nbeach){
 
   beach.name <- str_replace(tmp$beach[1], "/", "_")
   
-  # 
-  # ggsave(filename = paste0("figures/", beach.name, ".png"),
-  #        device = "png", dpi = 600)  
+
+  ggsave(filename = paste0("figures/", beach.name, "_mu.png"),
+         device = "png", dpi = 600)
 }
 
 
 ```
+
 

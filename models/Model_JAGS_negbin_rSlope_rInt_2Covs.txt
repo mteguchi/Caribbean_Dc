@@ -10,9 +10,12 @@
 
 model{
 	for(i in 1:N){
-		count[i] ~ dnegbin(p[i], r)
+		count[i] ~ dnegbin(p, r[i])
 
-		p[i] <- r/(mu[i] + r)
+		r[i] <- (mu[i] * p)/(1-p)
+		#count[i] ~ dnegbin(p[i], r)
+
+		#p[i] <- r/(mu[i] + r)
 
 		resid[i] <- count[i] - mu[i]  # computes residuals
 		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + epsilon[i]
@@ -29,16 +32,17 @@ model{
 		# log likelihood of observed values
 		#loglikobs[i] <- count[i] * log(mu[i]) - mu[i] + logfact(count[i])       
 
-		loglik[i] <- logdensity.negbin(count[i], p[i], r)
+		loglik[i] <- logdensity.negbin(count[i], p, r)
 
 	}
 
-	r ~ dgamma(5, 0.1)
+	#r ~ dgamma(5, 0.1)
+	p ~ dbeta(1,1)
 
-	Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value
-	Devpred <- -2*sum(loglikpre[1:N])        # deviance of predicted values
-	DiffDev <- Devpred-Devobs                # difference between deviances#
-	probP <- step(DiffDev)					 #  has value=1 if DiffDev>0, 0 otherwise 
+	#Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value
+	#Devpred <- -2*sum(loglikpre[1:N])        # deviance of predicted values
+	#DiffDev <- Devpred-Devobs                # difference between deviances#
+	#probP <- step(DiffDev)					 #  has value=1 if DiffDev>0, 0 otherwise 
 
 	for(j in 1:nbeach){
 		a0[j] <- B[j,1]

@@ -11,9 +11,11 @@
 
 model{
 	for(i in 1:N){
-		count[i] ~ dnegbin(p[i], r)
+		count[i] ~ dnegbin(p, r[i])
+		r[i] <- (mu[i] * p)/(1-p)
+		#count[i] ~ dnegbin(p[i], r)
 
-		p[i] <- r/(mu[i] + r)
+		#p[i] <- r/(mu[i] + r)
 
 		resid[i] <- count[i] - mu[i]  # computes residuals
 		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i]  + epsilon[i]
@@ -33,7 +35,8 @@ model{
 		loglik[i] <- logdensity.negbin(count[i], p[i], r)
 	}
 
-	r ~ dgamma(5, 0.1)
+	#r ~ dgamma(5, 0.1)
+	p ~ dbeta(1,1)
 
 	Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value
 	Devpred <- -2*sum(loglikpre[1:N])        # deviance of predicted values

@@ -6,7 +6,7 @@ output: html_notebook
 
 Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
 
-In this version (v2), I use the negative binomial distribution intead of Poisson because Poisson resulted in high Pareto k statistics for some beaches in FL. Negative binomial distribution should be a bit more flexible than Poisson. We'll see how it works... 
+In this version (v2), I use the negative binomial distribution instead of Poisson because Poisson resulted in high Pareto k statistics for some beaches in FL. Negative binomial distribution should be a bit more flexible than Poisson. We'll see how it works... 
 
 New data were received in August 2020. 
 
@@ -143,11 +143,14 @@ loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
 
 #length(out.names)
-for (k in 1:1){
-  MCMC.params$model.file = paste0("models/Model_JAGS_negbin_rSlope_rInt_", model.names[k], ".txt")
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_negbin_rSlope_rInt_",
+                                  model.names[k], ".txt")
   FL.jags.data$X <- X.FL[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/JAGS_out_negbin_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    
     jm <- jags(data = FL.jags.data,
                #inits = inits,
                parameters.to.save= parameters,
@@ -160,23 +163,29 @@ for (k in 1:1){
                parallel=T)
     
     saveRDS(jm, 
-            file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))
     
   } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
+    jm <- readRDS(file = paste0("RData/JAGS_out_negbin_rSlope_rInt_", 
+                                out.names[k], "_FL.rds"))
   }
 
   Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
   
-  if (!file.exists(paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/LOOIC_negbin_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
                                   data.vector = data.vector, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/LOOIC_negbin_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))
     
   } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_negbin_rSlope_rInt_", out.names[k], "_FL.rds"))
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_negbin_rSlope_rInt_",
+                                          out.names[k], "_FL.rds"))
   }
   
 }

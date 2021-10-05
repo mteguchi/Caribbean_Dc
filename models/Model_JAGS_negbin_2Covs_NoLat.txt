@@ -12,9 +12,12 @@
 
 model{
 	for(i in 1:N){
-		count[i] ~ dnegbin(p[i], r)
+		count[i] ~ dnegbin(p, r[i])
 
-		p[i] <- r/(mu[i] + r)
+		r[i] <- (mu[i] * p)/(1-p)
+		#count[i] ~ dnegbin(p[i], r)
+
+		#p[i] <- r/(mu[i] + r)
 
 		log(mu[i]) <- a0 + a1 * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + epsilon[i]
 
@@ -25,7 +28,8 @@ model{
 
 	}
 
-	r ~ dgamma(5, 0.1)
+	#r ~ dgamma(5, 0.1)
+	p ~ dbeta(1,1)
 
 	# a0 and a1 are now "free" parameters because latitude doesn't affect them.
 	a0 ~ dnorm(0, 0.01)

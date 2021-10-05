@@ -5,20 +5,23 @@
 
 model{
 	for(i in 1:N){
-		count[i] ~ dnegbin(p[i], r)
+		count[i] ~ dnegbin(p, r[i])
 
-		logit(p[i]) <- ifelse(yearc[i] < year.change, 
-								a0.1 + a1.1 * yearc[i] + beta * X[i] + epsilon[i],
-								a0.2 + a1.2 * yearc[i] + beta * X[i] + epsilon[i])
+		r[i] <- (mu[i] * p)/(1-p)
+		#count[i] ~ dnegbin(p[i], r)
 
-		mu[i] <- (r * (1 - p[i]))/p[i]
+		#logit(p[i]) <- ifelse(yearc[i] < year.change, 
+		#						a0.1 + a1.1 * yearc[i] + beta * X[i] + epsilon[i],
+		#						a0.2 + a1.2 * yearc[i] + beta * X[i] + epsilon[i])
+
+		#mu[i] <- (r * (1 - p[i]))/p[i]
 		
 		#p[i] <- r/(mu[i] + r)
 		#log(mu[i]) <- ifelse(yearc[i] < year.change, 
 		#						a0.1 + a1.1 * yearc[i] + beta * X[i] + epsilon[i],
 		#						a0.2 + a1.2 * yearc[i] + beta * X[i] + epsilon[i])
 
-		#log(mu[i]) <- a0 + a1 * yearc[i] + beta * X[i] + epsilon[i]
+		log(mu[i]) <- a0 + a1 * yearc[i] + beta * X[i] + epsilon[i]
 
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
@@ -33,7 +36,8 @@ model{
 
 	year.change ~ dunif(minT, maxT)
 	
-	r ~ dgamma(2, 0.1)
+	#r ~ dgamma(2, 0.1)
+	p ~ dbeta(1,1)
 
 	beta ~ dnorm(0, 0.01)
 

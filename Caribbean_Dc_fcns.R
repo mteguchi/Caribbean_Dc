@@ -1,12 +1,12 @@
 library(loo)
 
-compute.LOOIC <- function(loglik, data.vector, MCMC.params){
+compute.LOOIC <- function(loglik.mat, data.vector, MCMC.params){
   n.per.chain <- (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin
   
-  loglik.vec <- as.vector(loglik)
+  #loglik.vec <- as.vector(loglik)
   
   # each column corresponds to a data point and rows are MCMC samples
-  loglik.mat <- matrix(loglik.vec, nrow = n.per.chain * MCMC.params$n.chains)
+  #loglik.mat <- matrix(loglik.vec, nrow = n.per.chain * MCMC.params$n.chains)
   # take out the columns that correspond to missing data points
   loglik.mat <- loglik.mat[, !is.na(data.vector)]
   

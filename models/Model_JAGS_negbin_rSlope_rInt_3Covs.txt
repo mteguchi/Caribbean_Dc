@@ -8,23 +8,25 @@
 
 # 2020-03-10
 # 2020-09-11 Negative binomial distribution instead of Poisson
+# 2021-10-04 Changed p[i] to p and r to r[i]
 
 model{
 	for(i in 1:N){
-		count[i] ~ dnegbin(p[i], r)
+		count[i] ~ dnegbin(p, r[i])
 
-		p[i] <- r/(mu[i] + r)
+		r[i] <- (mu[i] * p)/(1-p)
 		resid[i] <- count[i] - mu[i]  # computes residuals
 		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
 		
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.negbin(count[i], p[i], r)
+		loglik[i] <- logdensity.negbin(count[i], p, r[i])
 
 	}
 
-	r ~ dgamma(5, 0.1)
+	#r ~ dgamma(5, 0.1)
+	p ~ dbeta(1,1)
 
 	for(j in 1:nbeach){
 		a0[j] <- B[j,1]

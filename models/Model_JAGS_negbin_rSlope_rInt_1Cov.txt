@@ -32,16 +32,16 @@ model{
 		# log likelihood of observed values
 		#loglikobs[i] <- count[i] * log(mu[i]) - mu[i] + logfact(count[i])       
 
-		loglik[i] <- logdensity.negbin(count[i], p[i], r)
+		loglik[i] <- logdensity.negbin(count[i], p, r[i])
 	}
 
 	#r ~ dgamma(5, 0.1)
 	p ~ dbeta(1,1)
 
-	Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value
-	Devpred <- -2*sum(loglikpre[1:N])        # deviance of predicted values
-	DiffDev <- Devpred-Devobs                # difference between deviances#
-	probP <- step(DiffDev)					 #  has value=1 if DiffDev>0, 0 otherwise 
+	#Devobs <- -2*sum(loglikobs[1:N])         # deviance of observed value
+	#Devpred <- -2*sum(loglikpre[1:N])        # deviance of predicted values
+	#DiffDev <- Devpred-Devobs                # difference between deviances#
+	#probP <- step(DiffDev)					 #  has value=1 if DiffDev>0, 0 otherwise 
 
 	for(j in 1:nbeach){
 		a0[j] <- B[j,1]

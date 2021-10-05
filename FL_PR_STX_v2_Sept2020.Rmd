@@ -211,15 +211,29 @@ Then... use LOOIC or DIC to compare these models.
 
 ```{r}
 loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
-  lapply(FUN = function(X){ X$estimates %>% data.frame() %>% 
-      rownames_to_column(var = "Statistic")})
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate)) %>%
+  unlist()
 
-looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
-unlist(looic)
+looic.df <- data.frame(model = out.names[1:7],
+                       looic = loo.all) %>%
+  arrange(by = "looic")
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
 ```
 
 
-Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? 
+```{r}
+plot(loo.out[[1]]$loo.out)
+```
+
+
+
+Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 18% were > 0.7. Should we be concerned? 
 
 ```{r}
 sum(loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)

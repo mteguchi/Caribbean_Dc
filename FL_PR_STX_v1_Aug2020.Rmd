@@ -1,0 +1,197 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+library(stringr)
+
+MCMC.params <- list(n.samples = 100000,
+                    n.burnin = 50000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
+                "mu.a0", "mu.a1",
+                "rea0", "rea1",
+                "delta1", "delta2",
+                "sigma.e", "Sigma.B",
+                "sigma.a0", "sigma.a1",
+                "floridapc", "probP", "deviance",
+                "Devobs", "Devpred")
+
+```
+
+Try fitting growth models - we can use the same model as the last paper as required/requested by KS. 
+
+Get data;
+
+```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+nest.counts.FL <- read_csv("data/FL_07262020_FINAL.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)))
+
+max.ID <- max(nest.counts.FL$ID)
+
+nest.counts.PR <- read_csv("data/PR_07262020_FINAL.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         ID = ID + max.ID,
+         latitude = 18.467761)
+
+max.ID <- max(nest.counts.PR)
+nest.counts.STX <- read_csv("data/STX_07262020_FINAL.csv", 
+                            col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)))
+
+nest.counts.STX$latitude <- 17.679899
+
+nest.counts <- rbind(nest.counts.FL, nest.counts.PR, nest.counts.STX) %>%
+  mutate(ID2 = as.numeric(as.factor(ID))) -> nest.counts
+
+nest.counts %>% 
+  group_by(ID2) %>%
+  summarise(n = n()) -> nest.counts.ns
+
+nest.counts %>% 
+  select(ID2, ID, latitude, beach_f) %>% 
+  group_by(ID) %>%
+  summarise(latitude = first(latitude),
+            ID2 = first(ID2),
+            name = first(beach_f)) %>%
+  mutate(latc = latitude - mean(latitude),
+         latc2 = latc^2,
+         beach = ID,
+         ID2 = ID2,
+         name = name,
+         n = nest.counts.ns$n) -> lat.dat 
+
+# length surveyed, # days per week surveyed, # days surveyed per year
+# 
+X <- cbind(nest.counts$distance - median(nest.counts$distance), 
+           nest.counts$days_week - median(nest.counts$days_week),
+           nest.counts$days_year - median(nest.counts$days_year))
+
+median.year <- round(median(seq(min(nest.counts$year),
+                                max(nest.counts$year))))
+
+# jags.data.2008 contains wrong counts... check this!
+jags.data <- list(N = length(nest.counts$nests),
+                  nbeach = length(unique(nest.counts$ID2)),
+                  count = nest.counts$nests,
+                  beach = nest.counts$ID2,
+                  yearc = (nest.counts$year - median.year),
+                  X = X,
+                  latc = lat.dat$latc,
+                  latc2 = lat.dat$latc2)
+```
+
+Then run the model:
+
+```{r}
+MCMC.params$model.file = "models/Model_JAGS_rSlope_rInt_3Covs.txt"
+
+if (!file.exists("RData/JAGS_out_Dist_rSlope_rInt_3Covs_Aug2020.rds")){
+  jm <- jags(data = jags.data,
+             #inits = inits,
+             parameters.to.save= parameters,
+             model.file = MCMC.params$model.file,
+             n.chains = MCMC.params$n.chains,
+             n.burnin = MCMC.params$n.burnin,
+             n.thin = MCMC.params$n.thin,
+             n.iter = MCMC.params$n.samples,
+             DIC = T, 
+             parallel=T)
+  
+  saveRDS(jm, file = "RData/JAGS_out_Dist_rSlope_rInt_3Covs_Aug2020.rds")
+  
+} else {
+  jm <- readRDS("RData/JAGS_out_Dist_rSlope_rInt_3Covs_Aug2020.rds")
+}
+
+summary(jm)
+```
+
+At least they converged fine! 
+
+
+```{r}
+summary.df <- data.frame(jm$summary) %>%
+  rownames_to_column("Parameter")
+
+# find the beach-specific growth rate in percent
+#mcmc_trace(jm.MS$samples, pars = "a1pc[38]")
+
+summary.df %>% filter(str_detect(Parameter, pattern = "a1pc")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_a1pc = mean,
+            sd_a1pc = sd,
+            low25_a1pc = X2.5.,
+            median_a1pc = X50.,
+            upper975_a1pc = X97.5.)-> a1pc
+
+a1pc %>% left_join(lat.dat, by = "ID") %>%
+  arrange(latc) -> a1pc
+
+summary.df %>% 
+  filter(str_detect(Parameter, pattern = "mu.a1")) %>%
+  rownames_to_column("beach") %>%
+  transmute(ID = as.numeric(beach),
+            mean_mu.a1 = mean,
+            sd_mu.a1 = sd,
+            low25_mu.a1 = X2.5.,
+            median_mu.a1 = X50.,
+            upper975_mu.a1 = X97.5.)-> mu.a1
+
+mu.a1 %>% left_join(lat.dat, by = "ID") %>%
+  arrange(latc) -> mu.a1
+
+#head(a1pc.2008)
+```
+
+
+Look at why a1pc.2008 is quite different from a1pc.new...
+
+Compare results visually...
+```{r}
+
+ggplot() + 
+  geom_point(data = a1pc, 
+             aes(x = beach, y = mean_a1pc),
+             color = "blue") + 
+  geom_errorbar(data = a1pc,
+                aes(ymin = low25_a1pc,
+                    ymax = upper975_a1pc,
+                    x = beach),
+                color = "blue") 
+```
+
+TAke a look at the overdispersion variance parameter.
+
+```{r}
+mcmc_dens(jm$samples, pars = "sigma.e")
+```
+
+It's definitely not zero... 
+
+
+

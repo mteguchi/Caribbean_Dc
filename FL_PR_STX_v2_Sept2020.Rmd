@@ -119,6 +119,7 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
 
 ```
 
+The 0cov model did not work... not sure what the problem is 2021-10-05
 
 ```{r}
 model.names <- c("3Covs", rep("2Covs", times = 3), rep("1Cov", times = 3), "0Cov")
@@ -200,7 +201,7 @@ Look at the convergence using Rhat statistic:
 Rmax
 ```
 
-They didn't converge... 
+They didn't converge... We have to do something about this... 
 
 ```{r}
 

@@ -195,11 +195,20 @@ Then... use LOOIC or DIC to compare these models.
 
 ```{r}
 loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
-  lapply(FUN = function(X){ X$estimates %>% data.frame() %>% 
-      rownames_to_column(var = "Statistic")})
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate)) %>%
+  unlist()
 
-looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
-unlist(looic)
+looic.df <- data.frame(model = out.names,
+                       looic = loo.all) %>%
+  arrange(by = "looic")
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
+
 ```
 
 
@@ -207,6 +216,11 @@ Looks like the 3 covariate model is the best. Pareto k statistic isn't great tho
 
 ```{r}
 sum(loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
+```
+
+
+```{r}
+plot(loo.out[[1]]$loo.out)
 ```
 
 
@@ -232,8 +246,7 @@ Some beaches are not good throughout their data, whereas others are okay... This
 
 Take a look at residuals
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", 
-                            out.names[which(unlist(looic) == min(unlist(looic)))], "_FL.rds"))
+jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", looic.df[1,"model"], "_FL.rds"))
 
 summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Parameter")
 
@@ -484,58 +497,33 @@ for (k in 1:length(out.names)){
 ```
 
 
-At least they converged fine! But not a great fit according to Pareto k diagnostic values. I tried the second order polynomial but didn't improve the fit much... Maybe this is where negative binomial is needed? 
-
 ```{r}
-parameters <- c("a0", "a1", "beta", "r",
-                "sigma.e", "deviance",
-                "Devobs", "Devpred", "loglik")
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate)) %>%
+  unlist()
 
-#jm <- list(length = length(out.names))
-loo.out <- list()
-Rmax <- vector(mode = "numeric", length = length(out.names))
-
-for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_negbin_", model.names[k], "_NoLat.txt")
-  STX.jags.data$X <- X.STX[[k]]
-
-  if (!file.exists(paste0("RData/JAGS_out_negbin_", out.names[k], "_NoLat_STX.rds"))){
-    jm <- jags(data = STX.jags.data,
-               #inits = inits,
-               parameters.to.save= parameters,
-               model.file = MCMC.params$model.file,
-               n.chains = MCMC.params$n.chains,
-               n.burnin = MCMC.params$n.burnin,
-               n.thin = MCMC.params$n.thin,
-               n.iter = MCMC.params$n.samples,
-               DIC = T, 
-               parallel=T)
-    
-    saveRDS(jm, 
-            file = paste0("RData/JAGS_out_negbin_", out.names[k], "_NoLat_STX.rds"))
-    
-  } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_negbin_", out.names[k], "_NoLat_STX.rds"))
-  }
-
-  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
-  
-  if (!file.exists(paste0("RData/LOOIC_negbin_", out.names[k], "_NoLat_STX.rds"))){
-    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
-                                  data.vector = data.vector, 
-                                  MCMC.params = MCMC.params)
-    saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_negbin_", out.names[k], "_NoLat_STX.rds"))
-    
-  } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_negbin_", out.names[k], "_NoLat_STX.rds"))
-  }
-  
-}
+looic.df <- data.frame(model = out.names,
+                       looic = loo.all) %>%
+  arrange(by = "looic")
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
 
 ```
 
-Using negative binomial seems to result in better Pareto k values. LOOIC indicated the model with no covariate was a better one, where logit(p[i]) = a0 + a1 * year + e.
+```{r}
+sum(loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+```
+
+
+```{r}
+plot(loo.out[[1]]$loo.out)
+```
+
 
 But, it doesn't make sense to have just one slope for the time term... Look at the pareto k values
 

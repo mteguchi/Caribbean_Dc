@@ -1,0 +1,638 @@
+---
+title: "STX modeling"
+author: "Tomo Eguchi"
+date: "11/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+library(stringr)
+
+source("Caribbean_Dc_fcns.R")
+
+MCMC.params <- list(n.samples = 50000,
+                    n.burnin = 30000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+n.per.chain <- (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin
+
+```
+
+# STX
+
+## data;
+
+```{r}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+STX.nest.counts <- read_csv("data/STX_Sept2020.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         dataset = "STX",
+         ID2 = as.numeric(as.factor(ID)))
+
+
+```
+
+
+```{r}
+STX.nest.counts %>% 
+  group_by(ID2) %>%
+  summarise(n = n()) -> STX.ns
+
+STX.nest.counts %>% 
+  select(ID2, ID, beach_f, year) %>% 
+  group_by(ID) %>%
+  summarise(ID2 = first(ID2),
+            name = first(beach_f),
+            median.yr = median(year),
+            min.yr = min(year),
+            n = n()) %>%
+  mutate(beach = ID,
+         ID2 = ID2,
+         name = name) -> STX.lat.dat
+
+
+ggplot(STX.nest.counts) +
+  geom_point(aes(x = year, y = nests)) +
+  geom_path(aes(x = year, y = nests))
+```
+
+## Poisson likelihood with one slope
+
+```{r}
+median.yr <- select(STX.lat.dat, c(ID, median.yr, min.yr)) %>%
+  right_join(STX.nest.counts, by = "ID") %>% 
+  select(ID, median.yr, min.yr, year)
+
+# changed from centering to left-adjusted for years. 
+# I think t >= 0 makes more
+# sense explaining the intercept than centering time. 
+# With t >= 0, it is the 
+# log(mu) at time 0 for each beach, whereas if time is centered, 
+# it is log(mu) at
+# some arbitrary year for each beach. 
+
+STX.jags.data <- list(N = length(STX.nest.counts$nests),
+                      nbeach = length(unique(STX.nest.counts$ID2)),
+                      count = STX.nest.counts$nests,
+                      beach = STX.nest.counts$ID2,
+                      yearc = median.yr$year - median.yr$min.yr)
+
+data.vector <- STX.jags.data$count %>% 
+  rep(each = MCMC.params$n.chains * n.per.chain)
+
+parameters <- c("a0", "a1", "beta", 
+                "sigma.e", "deviance", "mu",
+                "Devobs", "Devpred", "loglik")
+
+# sampling happens every day so Days of week are constant 
+model.names <- c("1Cov", "0Cov")
+out.names <- c("DayYr", "0Cov") 
+X.STX <- list(STX.nest.counts$days_year -
+                median(STX.nest.counts$days_year),
+              0)
+
+#jm <- list(length = length(out.names))
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_Pois_",
+                                  model.names[k], "_NoLat.txt")
+  STX.jags.data$X <- X.STX[[k]]
+
+  if (!file.exists(paste0("RData/JAGS_out_Pois_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    jm <- jags(data = STX.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_Pois_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_Pois_", 
+                                out.names[k], "_NoLat_STX.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_Pois_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = STX.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_Pois_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_Pois_",
+                                          out.names[k], 
+                                          "_NoLat_STX.rds"))
+  }
+  
+}
+
+
+```
+
+
+
+```{r}
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df <- data.frame(ID = seq(1, length(model.names)),
+                       model = model.names,
+                       cov = out.names,
+                       looic = loo.all) %>%
+  arrange(-desc(looic))
+
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
+
+```
+
+Use the simple model for inference. 
+
+```{r}
+sum(loo.out[[looic.df[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+```
+
+Lots are > 0.7. Not a great fit... 
+
+```{r}
+plot(loo.out[[looic.df[1,"ID"]]]$loo.out)
+```
+
+
+But, it doesn't make sense to have just one slope for the time term... Look at the pareto k values
+
+```{r}
+STX.paretok.data <- data.frame(count = STX.jags.data$count,
+                               yearc = STX.jags.data$yearc,
+                               year = STX.nest.counts$year,
+                               pareto_k = loo.out[[looic.df[1,"ID"]]]$loo.out$diagnostics$pareto_k)
+
+ggplot(data = STX.paretok.data) +
+  geom_point(aes(x = yearc, 
+                 y = count,
+                 color = pareto_k)) +
+  scale_color_continuous(type = "viridis")
+
+
+```
+
+Pareto k values are high after the inflection point in abundance trend... so, we need to consider a more flexible function that takes into account there is a large change in slope from positive to negative, rather than a linear increasing trend. 
+
+## Poisson likelihood with two slopes.
+
+```{r}
+MCMC.params <- list(n.samples = 75000,
+                    n.burnin = 45000,
+                    n.thin = 5,
+                    n.chains = 5,
+                    n.per.chain = (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin)
+
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "r", "year.change", "mu",
+                "sigma.e", "deviance",
+                "Devobs", "Devpred", "loglik")
+
+STX.jags.data$maxT <- 30
+STX.jags.data$minT <- 15
+
+#jm <- list(length = length(out.names))
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_Pois_2slopes_",
+                                  model.names[k], "_NoLat.txt")
+  STX.jags.data$X <- X.STX[[k]]
+  
+  if (!file.exists(paste0("RData/JAGS_out_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    
+    jm <- jags(data = STX.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_Pois_2slopes_",
+                                out.names[k], "_NoLat_STX.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_Pois_2slopes_",
+                          out.names[k], "_NoLat_STX.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = STX.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_Pois_2slopes_",
+                                          out.names[k], "_NoLat_STX.rds"))
+  }
+  
+}
+
+```
+
+
+I can't make these converge. Poisson may be not useful? When I removed the truncation functions (I(0,) and I(,0)) from the prior distributions for the slopes (a1.1, a1.2), they converged okay.
+
+```{r}
+Rmax
+```
+
+
+```{r}
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df <- data.frame(ID = seq(1, length(model.names)),
+                       model = model.names,
+                       cov = out.names,
+                       looic = loo.all) %>%
+  arrange(-desc(looic))
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
+
+```
+
+They are about the same... go with the simpler model.
+
+
+```{r}
+sum(loo.out[[looic.df[2,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+```
+
+So a lot are > 0.7... 
+
+```{r}
+plot(loo.out[[looic.df[2,"ID"]]]$loo.out)
+```
+
+
+```{r}
+jm <- readRDS(file = paste0("RData/JAGS_out_Pois_2slopes_",
+                                out.names[looic.df[1,"ID"]],
+                            "_NoLat_STX.rds"))
+
+mcmc_trace(jm$samples, c("a1.1", "a1.2", 
+                         "year.change", "sigma.e"))
+```
+
+They seemed to converged okay, except year.change, which should have been treated as a discrete variable rather than a continuous variable.
+
+```{r}
+mcmc_dens(jm$samples, c("a1.1", "a1.2", 
+                         "sigma.e"))
+
+```
+
+```{r}
+mcmc_hist(jm$samples, "year.change", binwidth = 1)
+```
+
+
+```{r}
+STX.paretok.data <- data.frame(count = STX.jags.data$count,
+                               yearc = STX.jags.data$yearc,
+                               year = STX.nest.counts$year,
+                               pareto_k = loo.out[[looic.df[1,"ID"]]]$loo.out$diagnostics$pareto_k)
+
+ggplot(data = STX.paretok.data) +
+  geom_point(aes(x = yearc, 
+                 y = count,
+                 color = pareto_k)) +
+  scale_color_continuous(type = "viridis")
+
+
+```
+
+
+## Normal likelihood with log(counts) with two slopes.
+
+```{r}
+MCMC.params <- list(n.samples = 120000,
+                    n.burnin = 85000,
+                    n.thin = 5,
+                    n.chains = 5,
+                    n.per.chain = (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin)
+
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "r", "year.change", "mu",
+                "sigma.e", "sigma.C", "deviance",
+                "Devobs", "Devpred", "loglik")
+
+STX.jags.data$maxT <- 30
+STX.jags.data$minT <- 15
+STX.jags.data$log.count <- log(STX.jags.data$count)
+
+#jm <- list(length = length(out.names))
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_LogNorm_2slopes_",
+                                  model.names[k], "_NoLat.txt")
+  STX.jags.data$X <- X.STX[[k]]
+  
+  if (!file.exists(paste0("RData/JAGS_out_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    
+    jm <- jags(data = STX.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_2slopes_",
+                                out.names[k], "_NoLat_STX.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_LogNorm_2slopes_",
+                          out.names[k], "_NoLat_STX.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = STX.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_LogNorm_2slopes_",
+                                          out.names[k], "_NoLat_STX.rds"))
+  }
+  
+}
+
+```
+
+
+
+
+
+```{r}
+Rmax
+```
+
+
+```{r}
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df <- data.frame(ID = seq(1, length(model.names)),
+                       model = model.names,
+                       cov = out.names,
+                       looic = loo.all) %>%
+  arrange(-desc(looic))
+#looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
+#unlist(looic)
+looic.df
+
+```
+
+They are about the same... go with the simpler model.
+
+
+```{r}
+sum(loo.out[[looic.df[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+```
+
+A little better...
+
+```{r}
+plot(loo.out[[looic.df[1,"ID"]]]$loo.out)
+```
+
+Better than the Poisson models. 
+
+
+```{r}
+jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_2slopes_",
+                                out.names[looic.df[1,"ID"]],
+                            "_NoLat_STX.rds"))
+
+mcmc_trace(jm$samples, c("a1.1", "a1.2", 
+                         "sigma.C[1]", "sigma.C[2]", 
+                         "sigma.e"))
+```
+
+They seemed to converged okay, except year.change, which should have been treated as a discrete variable rather than a continuous variable.
+
+```{r}
+mcmc_dens(jm$samples, c("a1.1", "a1.2", 
+                         "sigma.e", "sigma.C[1]", 
+                        "sigma.C[2]"))
+
+```
+
+Posteior distributions of the slopes (a1.1 = prior to the change point; below), standar deviation of observations, standard deviation of the slope before (sigma.C[1]) and after (sigma.C[2]) the change point. 
+
+```{r}
+mcmc_hist(jm$samples, "year.change", binwidth = 1)
+```
+
+
+```{r}
+STX.paretok.data <- data.frame(count = STX.jags.data$count,
+                               yearc = STX.jags.data$yearc,
+                               year = STX.nest.counts$year,
+                               pareto_k = loo.out[[looic.df[1,"ID"]]]$loo.out$diagnostics$pareto_k)
+
+ggplot(data = STX.paretok.data) +
+  geom_point(aes(x = yearc, 
+                 y = count,
+                 color = pareto_k)) +
+  scale_color_continuous(type = "viridis")
+
+
+```
+
+This is a lot better fit than the Poisson models.
+
+Summary statistics of growth rates:
+
+```{r}
+STX.summary.df <- data.frame(jm$summary) %>%
+  rownames_to_column("Parameter")
+
+STX.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "a1.1")) %>%
+  transmute(mean = mean,
+            low2.5 = X2.5.,
+            median = X50.,
+            high2.5 = X97.5.) -> STX.a1.1
+
+STX.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "a1.2")) %>%
+  transmute(mean = mean,
+            low2.5 = X2.5.,
+            median = X50.,
+            high2.5 = X97.5.) -> STX.a1.2
+
+STX.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "a0.1")) %>%
+  transmute(mean = mean,
+            low2.5 = X2.5.,
+            median = X50.,
+            high2.5 = X97.5.) -> STX.a0.1
+
+STX.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "a0.2")) %>%
+  transmute(mean = mean,
+            low2.5 = X2.5.,
+            median = X50.,
+            high2.5 = X97.5.) -> STX.a0.2
+
+STX.summary.df %>% 
+  filter(str_detect(Parameter, pattern = "year.change")) %>%
+  transmute(mean = mean,
+            low2.5 = X2.5.,
+            median = X50.,
+            high2.5 = X97.5.) -> STX.year.change
+
+```
+
+It shows that clearly (rapidly) decreasing nest counts in the last several years. 
+
+Put the observed counts and fitted function together:
+
+```{r}
+# regular expression - ^mu means the beginning of a string has to be a0
+# \\[ are the escape characters for [, which is a reserved character. 
+# ([0-9]+) means numbers 
+# \\] also to literal ]
+summary.mu.df <- STX.summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
+                                 x = STX.summary.df$Parameter),]
+
+STX.out <- data.frame(Year = STX.nest.counts$year,
+                      Nests = STX.nest.counts$nests,
+                      Mean = summary.mu.df$mean,
+                      Low2.5 = summary.mu.df$X2.5.,
+                      Median = summary.mu.df$X50.,
+                      High97.5 = summary.mu.df$X97.5.)
+
+# Create 95% band using the joing posteior:
+a0.1.samples <- extract.samples("a0.1", jm$samples)
+a0.2.samples <- extract.samples("a0.2", jm$samples)
+a1.1.samples <- extract.samples("a1.1", jm$samples)
+a1.2.samples <- extract.samples("a1.2", jm$samples)
+year.change.samples <- extract.samples("year.change", jm$samples)
+
+line.df <- data.frame(Year = as.numeric(),
+                      Mean = as.numeric(),
+                      low2.5 = as.numeric(),
+                      high97.5 = as.numeric())
+
+for (k in 0:(nrow(STX.nest.counts)-1)){
+  Y <- k + min(STX.nest.counts$year)
+  if (k < median(year.change.samples)){
+    tmp <- a0.1.samples + a1.1.samples * k
+  } else {
+    tmp <- a0.2.samples + a1.2.samples * k
+  }
+  
+  # tmp <- ifelse(k < median(year.change.samples),
+  #               a0.1.samples + a1.1.samples * k,
+  #               a0.2.samples + a1.2.samples * k)
+  line.df[k,] <- c(Y, mean(tmp), 
+                   quantile(tmp, c(0.025,0.975)))  
+}
+
+ggplot() +
+  # geom_errorbar(data = STX.out, 
+  #               aes(x = Year, 
+  #                   ymin = Low2.5, 
+  #                   ymax = High97.5)) +
+  # geom_point(data = STX.out, aes(x = Year, y = Mean)) + 
+  geom_point(data = STX.out, aes(x = Year, y = Nests), color = "red") +
+  geom_ribbon(data = line.df, 
+              aes(x = Year, 
+                  ymin = exp(low2.5),
+                  ymax = exp(high97.5)),
+              fill = "orange", alpha = 0.4) +
+  geom_path(data = line.df, aes(x = Year, y = exp(Mean)))
+
+```
+
+The orange band is the approximate 95% CI and the solid line is the mean. To compute the CIs, I fixed the change point to be the median (25th year = 2008, where 1983 = 0).

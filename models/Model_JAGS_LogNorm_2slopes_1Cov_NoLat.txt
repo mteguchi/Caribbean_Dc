@@ -11,16 +11,19 @@
 
 model{
 	for(i in 1:N){
-		count[i] ~ dpois(mu[i])
-
+		log.count[i] ~ dnorm(log(mu[i]), tau.C[i])
 		log(mu[i]) <- ifelse(yearc[i] < year.change,
 							a0.1 + a1.1 * yearc[i] + beta * X[i] + epsilon[i],
 							a0.2 + a1.2 * yearc[i] + beta * X[i] + epsilon[i])
 
+		tau.C[i] <- ifelse(yearc[i] < year.change,
+							pow(sigma.C[1], -2),
+							pow(sigma.C[2], -2))
+
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.pois(count[i], mu[i])
+		loglik[i] <- logdensity.norm(log.count[i], log(mu[i]), tau.C[i])
 	}
 
 	a0.1 ~ dnorm(0, 0.01)
@@ -36,4 +39,10 @@ model{
 
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.1) #dunif(0, 100)
+
+	#tau.C <- pow(sigma.C, -2)
+	for (k in 1:2){
+		sigma.C[k] ~ dgamma(2, 0.1)
+
+	}
 }

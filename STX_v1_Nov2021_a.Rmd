@@ -1,0 +1,450 @@
+---
+title: "STX modeling"
+author: "Tomo Eguchi"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::word_document2: default
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+rm(list=ls())
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(jagsUI)
+library(bayesplot)
+library(stringr)
+
+source("Caribbean_Dc_fcns.R")
+
+save.fig <- F
+```
+
+
+This document describes analyses of leatherback turtle nest counts data from Sandy Point, St Croix, USVI. 
+
+## Data {-}
+
+The observed nest counts at St Croix indicated a continuous increase in the numbers until 2001, somewhat steady counts until 2009, and a  continuous decline since then (Figure \@ref(fig:plot-raw)). We therefore fitted models that can accommodate such changes in nest counts. Nest counts were considered to be distributed as either Poisson or log-Normal distribution. We also considered using the number of survey days per year as a covariate for all model sets. 
+
+The goodness-of-fit of models were determined using Pareto-k statistics and best model was determined using LOOIC (leave-one-out information criteria; Vehtari et al. YR).
+
+```{r data, include=FALSE, echo=FALSE}
+col.def <- cols(ID = col_integer(),
+                year = col_integer(),
+                beach = col_character(),
+                latitude = col_double(),
+                distance = col_double(),
+                days_week = col_integer(),
+                days_year = col_integer(),
+                nests = col_integer())
+
+STX.nest.counts <- read_csv("data/STX_Sept2020.csv", 
+                           col_types = col.def) %>% 
+  mutate(beach_f = as.factor(toupper(beach)),
+         dataset = "STX",
+         ID2 = as.numeric(as.factor(ID)))
+
+median.year <- median(STX.nest.counts$year)
+min.year <- min(STX.nest.counts$year)
+
+STX.jags.data <- list(N = length(STX.nest.counts$nests),
+                      nbeach = length(unique(STX.nest.counts$ID2)),
+                      count = STX.nest.counts$nests,
+                      beach = STX.nest.counts$ID2,
+                      yearc = STX.nest.counts$year - min.year)
+
+p.1 <- ggplot(STX.nest.counts) +
+  geom_point(aes(x = year, y = nests)) +
+  geom_path(aes(x = year, y = nests)) +
+  xlab("") + ylab("Nest counts")
+
+if (save.fig)
+  ggsave(plot = p.1, 
+         filename = "figures/STX_nest_counts.png",
+         device = "png", dpi = 600)
+```
+
+
+```{r plot-raw, echo=FALSE, cache=TRUE, fig.cap = "The observed nest counts at Sandy Point, St. Croix, USVI."}
+knitr::include_graphics("figures/STX_nest_counts.png")
+
+```
+
+
+## Poisson likelihood with two slopes {-}
+
+For this set of models, we used the Poisson distribution as the likelihood function of the observed nest counts ($y_i$). We treated the change point ($15 < \omega < 30$) to be an additional parameter to be estimated.   
+
+$y_i \sim POI(\mu_i)$
+
+$\mu_i = \beta_{0,1} + \beta_{1,1} \times X_i + \beta_{2,1} \times T + \epsilon_i$ if $T \lt \omega$ 
+
+$\mu_i = \beta_{0,2} + \beta_{1,2} \times X_i + \beta_{2,2} \times T + \epsilon_i$ if $T \ge \omega$ 
+
+$X_i$ is the number of survey days for the i-th year. 
+
+We used the following prior distributions:
+
+$\beta_{.,.} \sim N(0, 10)$, where $SD = 10$
+
+$\epsilon_i \sim N(0, \eta)$, where $\eta \sim GAM(2, 0.1)$
+
+$\omega \sim POI(22.5)$
+
+
+```{r jags.Poi, echo=FALSE, cache=TRUE}
+MCMC.params <- list(n.samples = 75000,
+                    n.burnin = 45000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "r", "year.change", "mu",
+                "sigma.e", "deviance",
+                "Devobs", "Devpred", "loglik")
+
+model.names <- c("1Cov", "0Cov")
+out.names <- c("DayYr", "0Cov") 
+X.STX <- list(STX.nest.counts$days_year -
+                median(STX.nest.counts$days_year),
+              0)
+
+# max and min for the change point.
+STX.jags.data$maxT <- 30
+STX.jags.data$minT <- 15
+
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_Pois_2slopes_",
+                                  model.names[k], "_NoLat.txt")
+  STX.jags.data$X <- X.STX[[k]]
+  
+  if (!file.exists(paste0("RData/JAGS_out_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    
+    jm <- jags(data = STX.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_Pois_2slopes_",
+                                out.names[k], "_NoLat_STX.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_Pois_2slopes_",
+                          out.names[k], "_NoLat_STX.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = STX.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_Pois_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_Pois_2slopes_",
+                                          out.names[k], "_NoLat_STX.rds"))
+  }
+  
+}
+
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df.Poi <- data.frame(ID = seq(1, length(model.names)),
+                       model = model.names,
+                       cov = out.names,
+                       looic = loo.all) %>%
+  arrange(-desc(looic))
+
+prop.high.pareto.k.Poi <- sum(loo.out[[looic.df.Poi[2,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+
+```
+
+MCMC converged for both models where Rhat statistic was less than 1.1. LOOIC indicated that both models are virtually equivalent (\@ref(tab:table-Poi)). Consequently, we used the simpler model with no covariate as the best model. Pareto k statistics indicated that the model did not fit to a large proportion of the data points (p = `r prop.high.pareto.k.Poi`).
+
+```{r table-Poi, echo=FALSE}
+knitr::kable(looic.df.Poi, digits = 1,
+             caption = "Model comparison for the Poisson likelihood models.")
+
+
+```
+
+
+## Normal likelihood with log(counts) with two slopes {-}
+
+The second set of models used the normal distribution as the likelihood function for log-transformed nest counts ($y_i$). Similarly to the Poisson models, we treated the change point ($15 < \omega < 30$) as an unknown parameter. 
+
+$log(y_i) \sim N(\mu_i, \sigma_i)$
+
+$\mu_i = \beta_{0,1} + \beta_{1,1} \times X_i + \beta_{2,1} \times T + \epsilon_i$ if $T \lt \omega$ 
+
+$\mu_i = \beta_{0,2} + \beta_{1,2} \times X_i + \beta_{2,2} \times T + \epsilon_i$ if $T \ge \omega$ 
+
+$\sigma_i = \sigma_1$ if $T \lt \omega$
+
+$\sigma_i = \sigma_2$ if $T \ge \omega$
+
+
+$X_i$ is the number of survey days for the i-th year. 
+
+We used the following prior distributions:
+
+$\beta_{.,.} \sim N(0, 10)$, where $SD = 10$
+
+$\epsilon_i \sim N(0, \eta)$, where $\eta \sim GAM(2, 0.1)$
+
+$\omega \sim POI(22.5)$
+
+$\sigma_. \sim GAM(2, 0.1)$
+
+
+
+```{r jags.normal, echo=FALSE}
+MCMC.params <- list(n.samples = 120000,
+                    n.burnin = 85000,
+                    n.thin = 5,
+                    n.chains = 5)
+
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "r", "year.change", "mu",
+                "sigma.e", "sigma.C", "deviance",
+                "Devobs", "Devpred", "loglik")
+
+STX.jags.data$log.count <- log(STX.jags.data$count)
+
+#jm <- list(length = length(out.names))
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_LogNorm_2slopes_",
+                                  model.names[k], "_NoLat.txt")
+  STX.jags.data$X <- X.STX[[k]]
+  
+  if (!file.exists(paste0("RData/JAGS_out_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))){
+    
+    jm <- jags(data = STX.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_2slopes_",
+                                out.names[k], "_NoLat_STX.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_LogNorm_2slopes_",
+                          out.names[k], "_NoLat_STX.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = STX.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_LogNorm_2slopes_", 
+                          out.names[k], "_NoLat_STX.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_LogNorm_2slopes_",
+                                          out.names[k], "_NoLat_STX.rds"))
+  }
+  
+}
+
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df.Normal <- data.frame(ID = seq(1, length(model.names)),
+                       model = model.names,
+                       cov = out.names,
+                       looic = loo.all) %>%
+  arrange(-desc(looic))
+
+prop.high.pareto.k.Normal <- sum(loo.out[[looic.df.Normal[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
+```
+
+MCMC converged for both models where Rhat statistic was less than 1.1. LOOIC indicated that both models are virtually equivalent (\@ref(tab:table-Normal)). Consequently, we used the simpler model with no covariate as the best model. Pareto k statistics indicated that the model fit well to a large proportion of the data points (p = `r 1 - prop.high.pareto.k.Normal`).
+
+
+```{r table-Normal, echo=FALSE}
+knitr::kable(looic.df.Normal, digits = 1,
+             caption = "Model comparison for the Normal likelihood models.")
+
+
+```
+
+
+```{r best.model, echo=FALSE}
+jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_2slopes_",
+                                out.names[looic.df.Normal[1,"ID"]],
+                            "_NoLat_STX.rds"))
+
+# change point
+change.point.samples <- extract.samples("year.change", jm$samples)
+# slopes
+a1.1.samples <- extract.samples("a1.1", jm$samples)
+a1.2.samples <- extract.samples("a1.2", jm$samples)
+
+p.change.point <- ggplot(data.frame(change.yr = change.point.samples)) +
+  geom_histogram(aes(x = change.yr), binwidth = 1) +
+  xlab("Years since 1982")
+
+if (save.fig)
+  ggsave(filename = "figures/STX_change_yr_hist.png",
+         plot = p.change.point, device = "png", 
+         dpi = 600)
+
+```
+
+## Inference {-}
+
+From these results, we decided to use the normal likelihood model with no covariates to make inference on change in abundance and the change point. The marginal posterior distribution of the change point (Figure \@ref(fig:plot-change-hist)) indicated that the median change point year was the 25th year (2006). The mean annual growth rate prior to 2006 was `r signif(mean(a1.1.samples),3)` (95%CI = [`r signif(quantile(a1.1.samples, 0.025),3)` - `r signif(quantile(a1.1.samples, 0.975),3)`]), whereas it was `r signif(mean(a1.2.samples),3)` (95%CI = [`r signif(quantile(a1.2.samples, 0.025),3)` = `r signif(quantile(a1.2.samples, 0.975),3)`], Figure \@ref(fig:plot-growth-rate)). The decline since 2006 is apparent (Figure \@ref(fig:plot-fit)). 
+
+
+```{r plot-change-hist, echo=FALSE, cache=TRUE, fig.cap = "The marginal posterior distribution of the year that abundance trend changed from positive to negative"}
+knitr::include_graphics("figures/STX_change_yr_hist.png")
+
+```
+
+
+```{r growth.rate, echo=FALSE}
+
+a1.df <- data.frame(a1 = c(a1.1.samples, a1.2.samples),
+                    idx = c(rep(1, length(a1.1.samples)), 
+                            rep(2, length(a1.2.samples))))
+
+label.names <- c(`1` = "<2006", `2` = ">=2006")
+p.a1 <- ggplot(a1.df) +
+  geom_density(aes(a1), fill = "lightblue",
+               color = "darkblue") +
+  facet_grid(~idx, labeller = as_labeller(label.names)) +
+  xlab("Annual growth rate") + ylab("Density")
+
+if (save.fig)
+  ggsave(plot = p.a1,
+         filename = "figures/STX_growths.png",
+         device = "png", dpi = 600)
+
+```
+
+
+```{r plot-growth-rate, echo=FALSE, cache=TRUE, fig.cap = "The marginal posterior distributions annual growth rates."}
+knitr::include_graphics("figures/STX_growths.png")
+
+```
+
+
+```{r fit.estimates, echo=F}
+STX.summary.df <- data.frame(jm$summary) %>%
+  rownames_to_column("Parameter")
+
+# regular expression - ^mu means the beginning of a string has to be a0
+# \\[ are the escape characters for [, which is a reserved character. 
+# ([0-9]+) means numbers 
+# \\] also to literal ]
+summary.mu.df <- STX.summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
+                                 x = STX.summary.df$Parameter),]
+
+STX.out <- data.frame(Year = STX.nest.counts$year,
+                      Nests = STX.nest.counts$nests,
+                      Mean = summary.mu.df$mean,
+                      Low2.5 = summary.mu.df$X2.5.,
+                      Median = summary.mu.df$X50.,
+                      High97.5 = summary.mu.df$X97.5.)
+
+# Create 95% band using the joing posteior:
+a0.1.samples <- extract.samples("a0.1", jm$samples)
+a0.2.samples <- extract.samples("a0.2", jm$samples)
+
+line.df <- data.frame(Year = as.numeric(),
+                      Mean = as.numeric(),
+                      low2.5 = as.numeric(),
+                      high97.5 = as.numeric())
+
+for (k in 0:(nrow(STX.nest.counts)-1)){
+  Y <- k + min(STX.nest.counts$year)
+  if (k < median(change.point.samples)){
+    tmp <- a0.1.samples + a1.1.samples * k
+  } else {
+    tmp <- a0.2.samples + a1.2.samples * k
+  }
+  
+  # tmp <- ifelse(k < median(year.change.samples),
+  #               a0.1.samples + a1.1.samples * k,
+  #               a0.2.samples + a1.2.samples * k)
+  line.df[k+1,] <- c(Y, mean(tmp), 
+                   quantile(tmp, c(0.025,0.975)))  
+}
+
+p.estimates <- ggplot() +
+  geom_point(data = STX.out, 
+             aes(x = Year, y = Nests), 
+             color = "red") +
+  geom_path(data = STX.out, 
+             aes(x = Year, y = Nests), 
+            color = "red") +
+  geom_ribbon(data = line.df, 
+              aes(x = Year, 
+                  ymin = exp(low2.5),
+                  ymax = exp(high97.5)),
+              fill = "orange", alpha = 0.4) +
+  geom_path(data = line.df, 
+            aes(x = Year, y = exp(Mean)),
+            size = 1.2)
+
+if (save.fig)
+  ggsave(p.estimates,
+         filename = "figures/STX_fit.png",
+         device = "png",
+         dpi = 600)
+```
+
+
+```{r plot-fit, echo=FALSE, cache=TRUE, fig.cap = "Observed nest counts at Sandy Point, St Croix, and fitted growth curves and their approximate 95% CI."}
+knitr::include_graphics("figures/STX_fit.png")
+
+```
+

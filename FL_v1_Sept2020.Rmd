@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 
-Trend analysis of leatherback turtles nesting in Florida, Puerto Rico, and St Croix with Kelly Stewart.
+Trend analysis of leatherback turtles nesting in Florida with Kelly Stewart.
 
 New data were received in August 2020. 
 
@@ -45,18 +45,6 @@ FL.nest.counts <- read_csv("data/FL_Sept2020.csv",
                            col_types = col.def) %>% 
   mutate(beach_f = as.factor(toupper(beach)),
          dataset = "FL",
-         ID2 = as.numeric(as.factor(ID)))
-
-PR.nest.counts <- read_csv("data/PR_Sept2020.csv", 
-                           col_types = col.def) %>% 
-  mutate(beach_f = as.factor(toupper(beach)),
-         dataset = "PR",
-         ID2 = as.numeric(as.factor(ID)))
-
-STX.nest.counts <- read_csv("data/STX_Sept2020.csv", 
-                           col_types = col.def) %>% 
-  mutate(beach_f = as.factor(toupper(beach)),
-         dataset = "STX",
          ID2 = as.numeric(as.factor(ID)))
 
 
@@ -120,40 +108,50 @@ parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
 
 
 ```{r}
-model.names <- c("3Covs", "3Covs_beach", 
-                 rep("2Covs", times = 3),
-                 rep("2Covs_beach", times = 3),
-                 rep("1Cov", times = 3),
-                 rep("1Cov_beach", times = 3),"0Cov")
-out.names <- c("3Covs", "3Covs_beach", 
-               "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
-               "logD_DayWk_beach", "logD_DayYr_beach", "DayWk_DayYr_beach",
-               "logD", "DayWk", "DayYr", 
-               "logD_beach", "DayWk_beach", "DayYr_beach", "0Cov") 
-X.FL <- list(cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
-             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_week - median(FL.nest.counts$days_week)),
-             cbind(log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             cbind(FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-                   FL.nest.counts$days_year - median(FL.nest.counts$days_year)),
-             log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-             FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-             FL.nest.counts$days_year - median(FL.nest.counts$days_year),
-             log(FL.nest.counts$distance) - median(log(FL.nest.counts$distance)),
-             FL.nest.counts$days_week - median(FL.nest.counts$days_week),
-             FL.nest.counts$days_year - median(FL.nest.counts$days_year),
+# reduced set of models as of Sept 2020. I can't remember why I removed
+# "beach" as a covariate... 
+# Found this comment "Looks like some parameters/models converged fine. Those with beach-specific betas didn't converge well."
+# I think that's the reason the beach covariate was removed. 
+
+model.names <- c("3Covs", rep("2Covs", times = 3), 
+                 rep("1Cov", times = 3), "0Cov")
+out.names <- c("3Covs", "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
+               "logD", "DayWk", "DayYr", "0Cov") 
+
+# model.names <- c("3Covs", "3Covs_beach", 
+#                  rep("2Covs", times = 3),
+#                  rep("2Covs_beach", times = 3),
+#                  rep("1Cov", times = 3),
+#                  rep("1Cov_beach", times = 3),"0Cov")
+# out.names <- c("3Covs", "3Covs_beach", 
+#                "logD_DayWk", "logD_DayYr", "DayWk_DayYr",
+#                "logD_DayWk_beach", "logD_DayYr_beach", "DayWk_DayYr_beach",
+#                "logD", "DayWk", "DayYr", 
+#                "logD_beach", "DayWk_beach", "DayYr_beach", "0Cov") 
+X.FL <- list(cbind(log(FL.nest.counts$distance) -
+                     median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_week -
+                     median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year -
+                     median(FL.nest.counts$days_year)),
+             cbind(log(FL.nest.counts$distance) -
+                     median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_week -
+                     median(FL.nest.counts$days_week)),
+             cbind(log(FL.nest.counts$distance) -
+                     median(log(FL.nest.counts$distance)),
+                   FL.nest.counts$days_year -
+                     median(FL.nest.counts$days_year)),
+             cbind(FL.nest.counts$days_week -
+                     median(FL.nest.counts$days_week),
+                   FL.nest.counts$days_year -
+                     median(FL.nest.counts$days_year)),
+             log(FL.nest.counts$distance) -
+               median(log(FL.nest.counts$distance)),
+             FL.nest.counts$days_week - 
+               median(FL.nest.counts$days_week),
+             FL.nest.counts$days_year - 
+               median(FL.nest.counts$days_year),
              0)
 
 #jm <- list(length = length(out.names))
@@ -161,10 +159,12 @@ loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
 
 for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_rSlope_rInt_", model.names[k], ".txt")
+  MCMC.params$model.file = paste0("models/Model_JAGS_rSlope_rInt_",
+                                  model.names[k], ".txt")
   FL.jags.data$X <- X.FL[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/JAGS_out_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
     jm <- jags(data = FL.jags.data,
                #inits = inits,
                parameters.to.save= parameters,
@@ -177,68 +177,78 @@ for (k in 1:length(out.names)){
                parallel=T)
     
     saveRDS(jm, 
-            file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/JAGS_out_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))
     
   } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", out.names[k], "_FL.rds"))
+    jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_",
+                                out.names[k], "_FL.rds"))
   }
 
   Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
   
-  if (!file.exists(paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))){
+  if (!file.exists(paste0("RData/LOOIC_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
                                   data.vector = FL.jags.data$count, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))
+            file = paste0("RData/LOOIC_rSlope_rInt_",
+                          out.names[k], "_FL.rds"))
     
   } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_rSlope_rInt_", out.names[k], "_FL.rds"))
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_rSlope_rInt_",
+                                          out.names[k], "_FL.rds"))
   }
   
 }
+
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df.Poi <- data.frame(ID = seq(1, length(model.names)),
+                           model = model.names,
+                           cov = out.names,
+                           looic = loo.all,
+                           MaxRhat = Rmax) %>%
+  arrange(-desc(looic))
+
+
 
 # summary(jm.FL.3Covs)
 # rm(jm.FL.3Covs)
 ```
 
-Look at the convergence using Rhat statistic:
-
-```{r}
-Rmax
-```
-
-Looks like some parameters/models converged fine. Those with beach-specific betas didn't converge well. 
-
 Then... use LOOIC or DIC to compare these models. 
 
 ```{r}
-loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
-  lapply(FUN = function(X){ X$estimates %>% data.frame() %>% 
-      rownames_to_column(var = "Statistic")})
-
-looic <- lapply(loo.all, FUN = function(X) filter(X, Statistic == "looic") %>% select(Estimate))
-unlist(looic)
+looic.df.Poi
 ```
 
 
-Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? 
+Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? Not really... 
 
 ```{r}
-sum(loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
+sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
 ```
 
 
 Take a look at which ones are bad ones
 
 ```{r}
-idx.bad.looic <- loo.out[[1]]$loo.out$diagnostics$pareto_k > 0.7
+idx.bad.looic <- loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7
 
 FL.paretok.data <- data.frame(beach = FL.jags.data$beach,
                             count = FL.jags.data$count,
                             yearc = FL.jags.data$yearc,
                             year = FL.nest.counts$year,
-                            pareto_k = loo.out[[1]]$loo.out$diagnostics$pareto_k)
+                            pareto_k = loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k)
 
 ggplot(data = FL.paretok.data) +
   geom_point(aes(x = beach, 
@@ -252,7 +262,7 @@ Some beaches are not good throughout their data, whereas others are okay... This
 Take a look at residuals
 ```{r}
 jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", 
-                            out.names[which(unlist(looic) == min(unlist(looic)))], "_FL.rds"))
+                            out.names[looic.df.Poi[1,"ID"]], "_FL.rds"))
 
 summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Parameter")
 
@@ -260,21 +270,30 @@ summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Paramete
 # \\[ are the escape characters for [, which is a reserved character. 
 # ([0-9]+) means numbers 
 # \\] also to literal ]
-summary.a0.df <- summary.df[grep(pattern = "^a0\\[([0-9]+)\\]", x = summary.df$Parameter),] %>%
+summary.a0.df <- summary.df[grep(pattern = "^a0\\[([0-9]+)\\]", 
+                                 x = summary.df$Parameter),] %>%
   rownames_to_column("beach") %>% mutate(ID = as.numeric(beach))
-summary.a1.df <- summary.df[grep(pattern = "^a1\\[([0-9]+)\\]", x = summary.df$Parameter),]
+summary.a1.df <- summary.df[grep(pattern = "^a1\\[([0-9]+)\\]", 
+                                 x = summary.df$Parameter),]
 
 #grep(pattern = ".+\\[([0-9]+)\\].+?$", x = summary.df$Parameter)
 
-summary.mu.df <- summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
-                                 x = summary.df$Parameter),] %>%
-  mutate(beach = FL.jags.data$beach)
+# summary.mu.df <- summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
+#                                  x = summary.df$Parameter),] %>%
+#   mutate(beach = FL.jags.data$beach)
 
-summary.beta1.df <- summary.df[grep(pattern = "beta[1]", x = summary.df$Parameter, fixed = TRUE),]
-summary.beta2.df <- summary.df[grep(pattern = "beta[2]", x = summary.df$Parameter, fixed = TRUE),]
-summary.beta3.df <- summary.df[grep(pattern = "beta[3]", x = summary.df$Parameter, fixed = TRUE),]
+summary.beta1.df <- summary.df[grep(pattern = "beta[1]", 
+                                    x = summary.df$Parameter, 
+                                    fixed = TRUE),]
+summary.beta2.df <- summary.df[grep(pattern = "beta[2]", 
+                                    x = summary.df$Parameter, 
+                                    fixed = TRUE),]
+summary.beta3.df <- summary.df[grep(pattern = "beta[3]", 
+                                    x = summary.df$Parameter, 
+                                    fixed = TRUE),]
 
-resid <- log.mu <- vector(mode = "numeric", length = length(FL.jags.data$count))
+resid <- log.mu <- vector(mode = "numeric", 
+                          length = length(FL.jags.data$count))
 beach <- FL.jags.data$beach
 yearc <- FL.jags.data$yearc
 X <- X.FL[[1]]
@@ -288,7 +307,8 @@ for (i in 1:length(FL.jags.data$count)){
   resid[i] <- FL.jags.data$count[i] - exp(log.mu[i])
 }
 
-summary.loglik.df <- summary.df %>% filter(str_detect(Parameter, "loglik"))
+summary.loglik.df <- summary.df %>% 
+  filter(str_detect(Parameter, "loglik"))
                                            
 FL.paretok.data$residual <- resid
 FL.paretok.data$mu <- exp(log.mu)
@@ -332,6 +352,87 @@ There is no particular pattern between Pareto k and observed count or estimated 
 How can I make the model more flexible? 
 
 I tried the negative binomial distribution in a couple ways instead of Poisson but it didn't work as expected. I might have used the distribution incorrectly. Kelly wanted to use the same model as before so let's move on for now. 
+
+For STX, I used log-normal distribution and they worked better than the Poisson models. So, I'll give that a try for FL data.
+
+
+```{r}
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+FL.jags.data$log.count <- log(FL.jags.data$count + 1)
+
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_LogNorm_rSlope_rInt_",
+                                  model.names[k], ".txt")
+  FL.jags.data$X <- X.FL[[k]]
+
+  if (!file.exists(paste0("RData/JAGS_out_LogNorm_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    jm <- jags(data = FL.jags.data,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_LogNorm_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_rSlope_rInt_",
+                                out.names[k], "_FL.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_LogNorm_rSlope_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = FL.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_LogNorm_rSlope_rInt_",
+                          out.names[k], "_FL.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_LogNorm_rSlope_rInt_",
+                                          out.names[k], "_FL.rds"))
+  }
+  
+}
+
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df.Norm <- data.frame(ID = seq(1, length(model.names)),
+                           model = model.names,
+                           cov = out.names,
+                           looic = loo.all,
+                           MaxRhat = Rmax) %>%
+  arrange(-desc(looic))
+
+
+```
+
+```{r}
+looic.df.Norm
+```
+
+None of these converged... 
+
+Stick with the Poisson models. 
+
 
 
 ```{r}

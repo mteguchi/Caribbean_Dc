@@ -4,21 +4,23 @@
 # adjusted model  - now computes residuals and computes bayesian p-value using deviance
 
 # converted to run in JAGS - TE
-# Random effects for slope and intercept and takes no covariate. 
+# Random effects for slope and intercept and takes 3 covariates. 
+#
+# Changed the likelihood from Poisson to Normal 2021-11-05
 
 # 2020-03-10
-# 2020-09-10 Modified to make it without covariates
 
 model{
 	for(i in 1:N){
-		count[i] ~ dpois(mu[i])
-		resid[i] <- count[i] - mu[i]  # computes residuals
-		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i]  + epsilon[i]
+		log.count[i] ~ dnorm(log(mu[i]), tau.y)
+		resid[i] <- log.count[i] - log(mu[i])  # computes residuals
+		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
 		
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.pois(count[i], mu[i])
+		loglik[i] <- logdensity.norm(log.count[i], mu[i], tau.y)
+
 	}
 
 	for(j in 1:nbeach){
@@ -36,6 +38,11 @@ model{
 		rea0[j] <- a0[j] - mu.a0
 		rea1[j] <- a1[j] - mu.a1[j]
 
+	}
+
+	for(k in 1:3){
+		beta[k] ~ dnorm(0, 0.01)
+		effpc[k] <- (exp(beta[k])-1) * 100
 	}
 
 	delta1 ~ dnorm(0, 0.01)
@@ -57,5 +64,8 @@ model{
 	rho ~ dunif(-1, 1)
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
+
+	tau.y <- pow(sigma.y, -2)
+	sigma.y ~ dgamma(2, 0.5) #dunif(0, 100)
 
 }

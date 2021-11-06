@@ -5,20 +5,22 @@
 
 # converted to run in JAGS - TE
 # Random effects for slope and intercept and takes no covariate. 
+#
+# Changed the likelihood from Poisson to Normal 2021-11-05
 
 # 2020-03-10
 # 2020-09-10 Modified to make it without covariates
 
 model{
 	for(i in 1:N){
-		count[i] ~ dpois(mu[i])
-		resid[i] <- count[i] - mu[i]  # computes residuals
+		log.count[i] ~ dnorm(log(mu[i]), tau.y)
+		resid[i] <- log.count[i] - log(mu[i])  # computes residuals
 		log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i]  + epsilon[i]
 		
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.pois(count[i], mu[i])
+		loglik[i] <- logdensity.norm(log.count[i], log(mu[i]), tau.y)
 	}
 
 	for(j in 1:nbeach){
@@ -58,4 +60,6 @@ model{
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
 
+	tau.y <- pow(sigma.y, -2)
+	sigma.y ~ dgamma(2, 0.5) #dunif(0, 100)
 }

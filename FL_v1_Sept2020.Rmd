@@ -570,7 +570,7 @@ beta.3.samples <- extract.samples("beta[3]", jm$samples)
 # beta.2 <- summary.beta2.df$mean
 # beta.3 <- summary.beta3.df$mean
 # Beta <- c(beta.1, beta.2, beta.3)
-k <- 3
+k <- 57
 for (k in 1:FL.jags.data$nbeach){
   line.df <- data.frame(Year = as.numeric(),
                         Mean = as.numeric(),
@@ -596,10 +596,10 @@ for (k in 1:FL.jags.data$nbeach){
   yr.tmp <- nest.counts.beach$year - min(nest.counts.beach$year)
   
   for (t in 0:(nrow(nest.counts.beach)-1)){
-    Y <- t + min(nest.counts.beach$year)
+    Y <- yr.tmp[t+1] + min(nest.counts.beach$year)
 
     samples <- a0.samples + 
-      a1.samples * t + 
+      a1.samples * yr.tmp[t+1] + 
       beta.1.samples * X.tmp[t+1,1] + 
       beta.2.samples * X.tmp[t+1,2] + 
       beta.3.samples * X.tmp[t+1,3] 
@@ -640,6 +640,104 @@ for (k in 1:FL.jags.data$nbeach){
 
 
 ``` 
+
+
+One thing I noticed at this point is that many have the same pattern where the nest counts started to decline around 2010. 
+
+As I did for the STX dataset, it may be good to add a change-point parameter. 
+
+```{r}
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "B.1.hat", "B.2.hat", 
+                "delta1", "delta2", "year.change",
+                "sigma.e", "Sigma.B.1", "Sigma.B.2",
+                "sigma.a0.1", "sigma.a1.1", 
+                "sigma.a0.2", "sigma.a1.2", "loglik")
+
+FL.jags.data.2slopes <- list(N = length(FL.nest.counts$nests),
+                             nbeach = length(unique(FL.nest.counts$ID2)),
+                             count = FL.nest.counts$nests,
+                             beach = FL.nest.counts$ID2,
+                             yearc = median.yr$year - min(median.yr$min.yr),
+                             latc = FL.lat.dat$latc,
+                             latc2 = FL.lat.dat$latc2,
+                             minT = 15,
+                             maxT = 35)
+
+
+# For these models, years have to be the same across the board because 
+# I assume the change point is happening the same at all beaches
+
+#jm <- list(length = length(out.names))
+loo.out <- list()
+Rmax <- vector(mode = "numeric", length = length(out.names))
+k <- 1
+for (k in 1:length(out.names)){
+  MCMC.params$model.file = paste0("models/Model_JAGS_r2Slopes_rInt_",
+                                  model.names[k], ".txt")
+  FL.jags.data.2slopes$X <- X.FL[[k]]
+
+  if (!file.exists(paste0("RData/JAGS_out_r2Slopes_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    jm <- jags(data = FL.jags.data.2slopes,
+               #inits = inits,
+               parameters.to.save= parameters,
+               model.file = MCMC.params$model.file,
+               n.chains = MCMC.params$n.chains,
+               n.burnin = MCMC.params$n.burnin,
+               n.thin = MCMC.params$n.thin,
+               n.iter = MCMC.params$n.samples,
+               DIC = T, 
+               parallel=T)
+    
+    saveRDS(jm, 
+            file = paste0("RData/JAGS_out_r2Slopes_rInt_", 
+                          out.names[k], "_FL.rds"))
+    
+  } else {
+    jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
+                                out.names[k], "_FL.rds"))
+  }
+
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  
+  if (!file.exists(paste0("RData/LOOIC_r2Slopes_rInt_", 
+                          out.names[k], "_FL.rds"))){
+    loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
+                                  data.vector = FL.jags.data$count, 
+                                  MCMC.params = MCMC.params)
+    saveRDS(loo.out[[k]], 
+            file = paste0("RData/LOOIC_r2Slopes_rInt_",
+                          out.names[k], "_FL.rds"))
+    
+  } else {
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_r2Slopes_rInt_",
+                                          out.names[k], "_FL.rds"))
+  }
+  
+}
+
+loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
+  lapply(FUN = function(X){ 
+    X$estimates %>% 
+      data.frame() %>% 
+      rownames_to_column(var = "Statistic")}) %>%
+  lapply(FUN = function(X) filter(X, Statistic == "looic") 
+         %>% select(Estimate)) %>%
+  unlist()
+
+looic.df.Poi.2slopes <- data.frame(ID = seq(1, length(model.names)),
+                                   model = model.names,
+                                   cov = out.names,
+                                   looic = loo.all,
+                                   MaxRhat = Rmax) %>%
+  arrange(-desc(looic))
+
+
+
+
+```
+
 
 <!-- Or use the estimated mu directly: -->
 

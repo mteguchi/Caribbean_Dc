@@ -29,7 +29,7 @@ This document describes analyses of leatherback turtle nest counts data from San
 
 ## Data {-}
 
-The observed nest counts at St Croix indicated a continuous increase in the numbers until 2001, somewhat steady counts until 2009, and a  continuous decline since then (Figure \@ref(fig:plot-raw)). We therefore fitted models that can accommodate such changes in nest counts. Nest counts were considered to be distributed as either Poisson or log-Normal distribution. We also considered using the number of survey days per year as a covariate for all model sets. 
+The observed nest counts at St Croix indicated a continuous increase in the numbers from 1982 to 2001, somewhat steady counts from 2002 to 2009, and a continuous decline since then (Figure \@ref(fig:plot-raw)). We therefore fitted models that can accommodate such changes in nest counts. Nest counts were considered to be distributed as either Poisson or log-Normal distribution. We also considered using the number of survey days per year as a covariate. 
 
 The goodness-of-fit of models were determined using Pareto-k statistics and best model was determined using LOOIC (leave-one-out information criteria; Vehtari et al. YR).
 
@@ -78,15 +78,15 @@ knitr::include_graphics("figures/STX_nest_counts.png")
 
 ## Poisson likelihood with two slopes {-}
 
-For this set of models, we used the Poisson distribution as the likelihood function of the observed nest counts ($y_i$). We treated the change point ($15 < \omega < 30$) to be an additional parameter to be estimated.   
+For this set of models, we used the Poisson distribution as the likelihood function of the observed nest counts ($y_i$) in the $i$th year. Time was shifted so that the first year (1982) was zero. We treated the change point ($15 < \omega < 30$ years from 1982) in nest counts growth rate to be an additional parameter to be estimated. The model can be described as the following.   
 
 $y_i \sim POI(\mu_i)$
 
-$\mu_i = \beta_{0,1} + \beta_{1,1} \times X_i + \beta_{2,1} \times T + \epsilon_i$ if $T \lt \omega$ 
+$\mu_i = \beta_{0,1} + \beta_{1,1} \times X_i + \beta_{2,1} \times i + \epsilon_i$ if $i \lt \omega$ 
 
-$\mu_i = \beta_{0,2} + \beta_{1,2} \times X_i + \beta_{2,2} \times T + \epsilon_i$ if $T \ge \omega$ 
+$\mu_i = \beta_{0,2} + \beta_{1,2} \times X_i + \beta_{2,2} \times i + \epsilon_i$ if $i \ge \omega$ 
 
-$X_i$ is the number of survey days for the i-th year. 
+$X_i$ is the number of survey days for the i-th year. For the model without the covariate, it was set $X_i = 0$ (0Cov).
 
 We used the following prior distributions:
 
@@ -186,7 +186,7 @@ prop.high.pareto.k.Poi <- sum(loo.out[[looic.df.Poi[2,"ID"]]]$loo.out$diagnostic
 
 ```
 
-MCMC converged for both models where Rhat statistic was less than 1.1. LOOIC indicated that both models are virtually equivalent (\@ref(tab:table-Poi)). Consequently, we used the simpler model with no covariate as the best model. Pareto k statistics indicated that the model did not fit to a large proportion of the data points (p = `r prop.high.pareto.k.Poi`).
+MCMC converged for both models where Rhat statistic was less than 1.1. LOOIC indicated that both models are virtually equivalent (Table \@ref(tab:table-Poi)). However, Pareto k statistics indicated that the model did not fit well to all data points.
 
 ```{r table-Poi, echo=FALSE}
 knitr::kable(looic.df.Poi, digits = 1,
@@ -198,31 +198,11 @@ knitr::kable(looic.df.Poi, digits = 1,
 
 ## Normal likelihood with log(counts) with two slopes {-}
 
-The second set of models used the normal distribution as the likelihood function for log-transformed nest counts ($y_i$). Similarly to the Poisson models, we treated the change point ($15 < \omega < 30$) as an unknown parameter. 
+The second set of models used the normal distribution as the likelihood function for log-transformed nest counts ($y_i$). The model is virtually the same as the previous model except the likelihood function. 
 
 $log(y_i) \sim N(\mu_i, \sigma_i)$
 
-$\mu_i = \beta_{0,1} + \beta_{1,1} \times X_i + \beta_{2,1} \times T + \epsilon_i$ if $T \lt \omega$ 
-
-$\mu_i = \beta_{0,2} + \beta_{1,2} \times X_i + \beta_{2,2} \times T + \epsilon_i$ if $T \ge \omega$ 
-
-$\sigma_i = \sigma_1$ if $T \lt \omega$
-
-$\sigma_i = \sigma_2$ if $T \ge \omega$
-
-
-$X_i$ is the number of survey days for the i-th year. 
-
-We used the following prior distributions:
-
-$\beta_{.,.} \sim N(0, 10)$, where $SD = 10$
-
-$\epsilon_i \sim N(0, \eta)$, where $\eta \sim GAM(2, 0.1)$
-
-$\omega \sim POI(22.5)$
-
-$\sigma_. \sim GAM(2, 0.1)$
-
+$\sigma_i \sim GAM(2, 0.1)$
 
 
 ```{r jags.normal, echo=FALSE}
@@ -306,7 +286,7 @@ looic.df.Normal <- data.frame(ID = seq(1, length(model.names)),
 prop.high.pareto.k.Normal <- sum(loo.out[[looic.df.Normal[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(STX.jags.data$count)
 ```
 
-MCMC converged for both models where Rhat statistic was less than 1.1. LOOIC indicated that both models are virtually equivalent (\@ref(tab:table-Normal)). Consequently, we used the simpler model with no covariate as the best model. Pareto k statistics indicated that the model fit well to a large proportion of the data points (p = `r 1 - prop.high.pareto.k.Normal`).
+MCMC converged for both models (0Cov and 1Cov) where Rhat statistic was less than 1.1 for all parameters. LOOIC indicated that the models are virtually equivalent (Table \@ref(tab:table-Normal)). Consequently, we used the simpler model with no covariate for making inference. Pareto k statistics indicated that the model fit well to a large proportion of the data points (`r signif(1 - prop.high.pareto.k.Normal, 3) * 100` %).
 
 
 ```{r table-Normal, echo=FALSE}
@@ -329,23 +309,30 @@ a1.1.samples <- extract.samples("a1.1", jm$samples)
 a1.2.samples <- extract.samples("a1.2", jm$samples)
 
 p.change.point <- ggplot(data.frame(change.yr = change.point.samples)) +
-  geom_histogram(aes(x = change.yr), binwidth = 1) +
+  geom_density(aes(x = change.yr), 
+               adjust = 2, 
+               fill = "lightblue",
+               color = "darkblue") +
+  #geom_histogram(aes(x = change.yr), binwidth = 1) +
   xlab("Years since 1982")
 
 if (save.fig)
-  ggsave(filename = "figures/STX_change_yr_hist.png",
+  ggsave(filename = "figures/STX_change_yr_dens.png",
          plot = p.change.point, device = "png", 
          dpi = 600)
+  # ggsave(filename = "figures/STX_change_yr_hist.png",
+  #        plot = p.change.point, device = "png", 
+  #        dpi = 600)
 
 ```
 
 ## Inference {-}
 
-From these results, we decided to use the normal likelihood model with no covariates to make inference on change in abundance and the change point. The marginal posterior distribution of the change point (Figure \@ref(fig:plot-change-hist)) indicated that the median change point year was the 25th year (2006). The mean annual growth rate prior to 2006 was `r signif(mean(a1.1.samples),3)` (95%CI = [`r signif(quantile(a1.1.samples, 0.025),3)` - `r signif(quantile(a1.1.samples, 0.975),3)`]), whereas it was `r signif(mean(a1.2.samples),3)` (95%CI = [`r signif(quantile(a1.2.samples, 0.025),3)` = `r signif(quantile(a1.2.samples, 0.975),3)`], Figure \@ref(fig:plot-growth-rate)). The decline since 2006 is apparent (Figure \@ref(fig:plot-fit)). 
+From these results, we decided to use the normal likelihood model with no covariates to make inference on change in abundance and the change point. The marginal posterior distribution of the change point (Figure \@ref(fig:plot-change-hist)) indicated that the median change point year was the 25th year (2006). The mean annual growth rate prior to 2006 was `r signif(mean(a1.1.samples),3)` (95%CI = [`r signif(quantile(a1.1.samples, 0.025),3)` - `r signif(quantile(a1.1.samples, 0.975),3)`]), whereas it was `r signif(mean(a1.2.samples),3)` (95%CI = [`r signif(quantile(a1.2.samples, 0.025),3)` = `r signif(quantile(a1.2.samples, 0.975),3)`], Figure \@ref(fig:plot-growth-rate)) after 2006. The decline since 2006 was apparent (Figure \@ref(fig:plot-fit)). 
 
 
 ```{r plot-change-hist, echo=FALSE, cache=TRUE, fig.cap = "The marginal posterior distribution of the year that abundance trend changed from positive to negative"}
-knitr::include_graphics("figures/STX_change_yr_hist.png")
+knitr::include_graphics("figures/STX_change_yr_dens.png")
 
 ```
 
@@ -371,7 +358,7 @@ if (save.fig)
 ```
 
 
-```{r plot-growth-rate, echo=FALSE, cache=TRUE, fig.cap = "The marginal posterior distributions annual growth rates."}
+```{r plot-growth-rate, echo=FALSE, cache=TRUE, fig.cap = "The marginal posterior distributions of annual growth rates."}
 knitr::include_graphics("figures/STX_growths.png")
 
 ```
@@ -395,7 +382,7 @@ STX.out <- data.frame(Year = STX.nest.counts$year,
                       Median = summary.mu.df$X50.,
                       High97.5 = summary.mu.df$X97.5.)
 
-# Create 95% band using the joing posteior:
+# Create 95% band using the joint posteior:
 a0.1.samples <- extract.samples("a0.1", jm$samples)
 a0.2.samples <- extract.samples("a0.2", jm$samples)
 
@@ -433,7 +420,8 @@ p.estimates <- ggplot() +
               fill = "orange", alpha = 0.4) +
   geom_path(data = line.df, 
             aes(x = Year, y = exp(Mean)),
-            size = 1.2)
+            size = 1.2) +
+  xlab("") + xlab("Number of nests")
 
 if (save.fig)
   ggsave(p.estimates,

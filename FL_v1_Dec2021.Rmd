@@ -17,7 +17,6 @@ library(lubridate)
 library(jagsUI)
 library(bayesplot)
 library(stringr)
-save.fig <- F
 
 source("Caribbean_Dc_fcns.R")
 
@@ -265,9 +264,7 @@ Take a look at residuals
 jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", 
                             out.names[looic.df.Poi[1,"ID"]], "_FL.rds"))
 
-summary.df <- jm$summary %>% 
-  data.frame() %>% 
-  rownames_to_column(var = "Parameter")
+summary.df <- jm$summary %>% data.frame() %>% rownames_to_column(var = "Parameter")
 
 # regular expression - ^a0 means the beginning of a string has to be a0
 # \\[ are the escape characters for [, which is a reserved character. 
@@ -436,41 +433,10 @@ None of these converged...
 
 Stick with the Poisson models. 
 
+START HERE 2021-11-06
+
 
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_rSlope_rInt_", 
-                            out.names[looic.df.Poi[1,"ID"]], "_FL.rds"))
-
-summary.df <- jm$summary %>% 
-  data.frame() %>% 
-  rownames_to_column(var = "Parameter")
-
-# regular expression - ^a0 means the beginning of a string has to be a0
-# \\[ are the escape characters for [, which is a reserved character. 
-# ([0-9]+) means numbers 
-# \\] also to literal ]
-summary.a0.df <- summary.df[grep(pattern = "^a0\\[([0-9]+)\\]", 
-                                 x = summary.df$Parameter),] %>%
-  rownames_to_column("beach") %>% mutate(ID = as.numeric(beach))
-summary.a1.df <- summary.df[grep(pattern = "^a1\\[([0-9]+)\\]", 
-                                 x = summary.df$Parameter),]
-
-#grep(pattern = ".+\\[([0-9]+)\\].+?$", x = summary.df$Parameter)
-
-# summary.mu.df <- summary.df[grep(pattern = "^mu\\[([0-9]+)\\]",
-#                                  x = summary.df$Parameter),] %>%
-#   mutate(beach = FL.jags.data$beach)
-
-summary.beta1.df <- summary.df[grep(pattern = "beta[1]", 
-                                    x = summary.df$Parameter, 
-                                    fixed = TRUE),]
-summary.beta2.df <- summary.df[grep(pattern = "beta[2]", 
-                                    x = summary.df$Parameter, 
-                                    fixed = TRUE),]
-summary.beta3.df <- summary.df[grep(pattern = "beta[3]", 
-                                    x = summary.df$Parameter, 
-                                    fixed = TRUE),]
-
 mcmc_trace(jm$samples, c("beta[1]", "beta[2]", "beta[3]" ))
 ```
 
@@ -496,7 +462,7 @@ FL.summary.df %>%
   transmute(ID = as.numeric(beach),
             mean_a1pc = mean,
             sd_a1pc = sd,
-            lower25_a1pc = X2.5.,
+            low25_a1pc = X2.5.,
             median_a1pc = X50.,
             upper975_a1pc = X97.5.)-> FL.a1pc
 
@@ -510,7 +476,7 @@ FL.summary.df %>%
   transmute(ID = as.numeric(beach),
             mean_mu.a1 = mean,
             sd_mu.a1 = sd,
-            lower25_mu.a1 = X2.5.,
+            low25_mu.a1 = X2.5.,
             median_mu.a1 = X50.,
             upper975_mu.a1 = X97.5.)-> FL.mu.a1
 
@@ -530,7 +496,7 @@ ggplot() +
              aes(x = beach, y = mean_a1pc,
              color = latc)) + 
   geom_errorbar(data = FL.a1pc,
-                aes(ymin = lower25_a1pc,
+                aes(ymin = low25_a1pc,
                     ymax = upper975_a1pc,
                     x = beach,
                     color = latc)) + 
@@ -541,121 +507,37 @@ ggplot() +
 Create a table with beach names:
 
 ```{r}
-FL.a1pc %>% select(ID, name, 
-                   mean_a1pc, sd_a1pc, 
-                   lower25_a1pc, upper975_a1pc) %>%
-  rename(ID = ID, Beach = name, 
-         mean = mean_a1pc, SD = sd_a1pc,
-         lower_2.5 = lower25_a1pc,
-         upper_97.5 = upper975_a1pc) -> FL.table
+FL.a1pc %>% select(ID, name, mean_a1pc, sd_a1pc, low25_a1pc, upper975_a1pc) -> FL.table
 
 #write_csv(FL.table, path = "data/FL_growth_rates_Sept2020.csv")
 ```
 
 Visualize FL output to see if they make sense.
 
-```{r}
-# For each beach, extract data, plot, then overlay predicted growth.
-# Need to use samples from joint posteriors 
-# The model
-
-# count[i] ~ dpois(mu[i])
-# log(mu[i]) <- a0[beach[i]] + a1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
-
-beta.1.samples <- extract.samples("beta[1]", jm$samples)
-beta.2.samples <- extract.samples("beta[2]", jm$samples)
-beta.3.samples <- extract.samples("beta[3]", jm$samples)
-
-# beta.1 <- summary.beta1.df$mean
-# beta.2 <- summary.beta2.df$mean
-# beta.3 <- summary.beta3.df$mean
-# Beta <- c(beta.1, beta.2, beta.3)
-k <- 3
-for (k in 1:FL.jags.data$nbeach){
-  line.df <- data.frame(Year = as.numeric(),
-                        Mean = as.numeric(),
-                        lower2.5 = as.numeric(),
-                        upper97.5 = as.numeric())
-
-  nest.counts.beach <- FL.nest.counts %>% filter(ID == k)
-  # slope
-  a1.samples <- extract.samples(paste0("a1[", k, "]"), jm$samples)
-  # a1.tmp <- FL.mu.a1 %>% 
-  #   filter(ID == k) %>% 
-  #   select(mean_mu.a1)
-  
-  # intercept
-  a0.samples <- extract.samples(paste0("a0[", k, "]"), jm$samples)
-  
-  #a0.tmp <- summary.a0.df %>% filter(ID == k) %>% select(mean)
-  
-  # covariates
-  X.tmp <- X[FL.nest.counts$ID == k,]
-  
-  # years
-  yr.tmp <- nest.counts.beach$year - min(nest.counts.beach$year)
-  
-  for (t in 0:(nrow(nest.counts.beach)-1)){
-    Y <- t + min(nest.counts.beach$year)
-
-    samples <- a0.samples + 
-      a1.samples * t + 
-      beta.1.samples * X.tmp[t+1,1] + 
-      beta.2.samples * X.tmp[t+1,2] + 
-      beta.3.samples * X.tmp[t+1,3] 
-    
-    line.df[t+1,] <- c(Y, mean(samples), 
-                       quantile(samples, c(0.025,0.975)))  
-  }
-  
-  ggplot() +
-    geom_point(data = nest.counts.beach,
-               aes(x = year, y = nests),
-               color = "red") +
-    geom_path(data = nest.counts.beach,
-              aes(x = year, y = nests),
-              color = "red") +
-    
-    geom_ribbon(data = line.df, 
-              aes(x = Year, 
-                  ymin = exp(lower2.5),
-                  ymax = exp(upper97.5)),
-              fill = "orange", alpha = 0.4) +
-    geom_path(data = line.df, 
-              aes(x = Year, y = exp(Mean)),
-              size = 1.2) +
-    labs(title = nest.counts.beach$beach[1]) +
-    ylab("# nests") + xlab("")
-
-  beach.name <- str_replace(nest.counts.beach$beach[1], "/", "_")
-
-  if (save.fig)
-    ggsave(filename = paste0("figures/", beach.name, ".png"),
-           device = "png", dpi = 600)
-
-}
-
-
-
-
-
-``` 
-
-<!-- Or use the estimated mu directly: -->
-
 <!-- ```{r} -->
-
 <!-- # For each beach, extract data, plot, then overlay predicted growth. -->
-<!-- beach.plots <- list() -->
+
+<!-- beta.1 <- summary.beta1.df$mean -->
+<!-- beta.2 <- summary.beta2.df$mean -->
+<!-- beta.3 <- summary.beta3.df$mean -->
+<!-- Beta <- c(beta.1, beta.2, beta.3) -->
 <!-- k <- 3 -->
 <!-- for (k in 1:FL.jags.data$nbeach){ -->
 <!--   tmp <- FL.nest.counts %>% filter(ID == k) -->
+<!--   # slope -->
+<!--   a1.tmp <- FL.mu.a1 %>% filter(ID == k) %>% select(mean_mu.a1)  -->
+<!--   # intercept -->
+<!--   a0.tmp <- summary.a0.df %>% filter(ID == k) %>% select(mean) -->
+<!--   # covariates -->
+<!--   X.tmp <- X[FL.nest.counts$ID == k,] -->
+<!--   # years -->
+<!--   yr.tmp <- tmp$year - min(tmp$year) -->
+<!--   mu.tmp <- exp(rep(unlist(a0.tmp), length(yr.tmp)) +  -->
+<!--     yr.tmp * rep(unlist(a1.tmp), length(yr.tmp)) +  -->
+<!--     X.tmp %*% Beta) -->
 
-<!--   summary.mu.df %>% filter(beach == k) %>%  -->
-<!--     select(mean) -> mu.tmp -->
-
-<!--   tmp$mu <- mu.tmp$mean -->
-<!--   beach.plots[[k]] <- ggplot(data = tmp) + -->
+<!--   tmp$mu <- mu.tmp -->
+<!--   ggplot(data = tmp) + -->
 <!--     geom_point(aes(x = year, y = nests)) +  -->
 <!--     geom_path(aes(x = year, y = mu)) + -->
 <!--     labs(title = tmp$beach[1]) +  -->
@@ -663,12 +545,42 @@ for (k in 1:FL.jags.data$nbeach){
 
 <!--   beach.name <- str_replace(tmp$beach[1], "/", "_") -->
 
-<!--   if (save.fig) -->
-<!--     ggsave(filename = paste0("figures/", beach.name, "_mu.png"), -->
-<!--            device = "png", dpi = 600) -->
+
+<!--   ggsave(filename = paste0("figures/", beach.name, ".png"), -->
+<!--          device = "png", dpi = 600) -->
 <!-- } -->
 
 
 <!-- ``` -->
+
+Or use the estimated mu directly:
+
+```{r}
+
+# For each beach, extract data, plot, then overlay predicted growth.
+
+k <- 3
+for (k in 1:FL.jags.data$nbeach){
+  tmp <- FL.nest.counts %>% filter(ID == k)
+
+  summary.mu.df %>% filter(beach == k) %>% 
+    select(mean) -> mu.tmp
+    
+  tmp$mu <- mu.tmp$mean
+  ggplot(data = tmp) +
+    geom_point(aes(x = year, y = nests)) + 
+    geom_path(aes(x = year, y = mu)) +
+    labs(title = tmp$beach[1]) + 
+    ylab("# nests") + xlab("")
+
+  beach.name <- str_replace(tmp$beach[1], "/", "_")
+  
+
+  ggsave(filename = paste0("figures/", beach.name, "_mu.png"),
+         device = "png", dpi = 600)
+}
+
+
+```
 
 

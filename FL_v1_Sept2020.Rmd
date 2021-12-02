@@ -17,7 +17,7 @@ library(lubridate)
 library(jagsUI)
 library(bayesplot)
 library(stringr)
-save.fig <- F
+save.fig <- T
 
 source("Caribbean_Dc_fcns.R")
 

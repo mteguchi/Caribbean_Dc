@@ -14,7 +14,7 @@
 model{
 	for(i in 1:N){
 		count[i] ~ dpois(mu[i])
-		resid[i] <- log.count[i] - log(mu[i])  # computes residuals
+		resid[i] <- count[i] - mu[i]  # computes residuals
 		log(mu[i]) <- ifelse(yearc[i] < year.change,
 		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + beta[1] * X[i] + epsilon[i],
 		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + beta[1] * X[i] + epsilon[i])
@@ -22,7 +22,7 @@ model{
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.pois(log.count[i], mu[i])
+		loglik[i] <- logdensity.pois(count[i], mu[i])
 	}
 
 	for(j in 1:nbeach){

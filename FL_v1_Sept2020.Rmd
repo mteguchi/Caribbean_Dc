@@ -699,7 +699,7 @@ for (k in 1:length(out.names)){
                                 out.names[k], "_FL.rds"))
   }
 
-  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)), na.rm = T)
   
   if (!file.exists(paste0("RData/LOOIC_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))){
@@ -734,7 +734,7 @@ looic.df.Poi.2slopes <- data.frame(ID = seq(1, length(model.names)),
   arrange(-desc(looic))
 
 
-
+looic.df.Poi.2slopes
 
 ```
 

@@ -644,13 +644,14 @@ for (k in 1:FL.jags.data$nbeach){
 
 One thing I noticed at this point is that many have the same pattern where the nest counts started to decline around 2010. 
 
-As I did for the STX dataset, it may be good to add a change-point parameter. 
+As I did for the STX dataset, it may be good to have two slopes with a change-point parameter. 
 
 ```{r}
 parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
-                "beta", "B.1.hat", "B.2.hat", 
-                "delta1", "delta2", "year.change",
-                "sigma.e", "Sigma.B.1", "Sigma.B.2",
+                "beta", "B.1", "B.2", 
+                "delta1", "delta2", 
+                "year.change",
+                "epsilon", "sigma.e",
                 "sigma.a0.1", "sigma.a1.1", 
                 "sigma.a0.2", "sigma.a1.2", "loglik")
 
@@ -737,6 +738,42 @@ looic.df.Poi.2slopes <- data.frame(ID = seq(1, length(model.names)),
 looic.df.Poi.2slopes
 
 ```
+
+
+The 2-covariate model with log-distance and Day of the week seems best, although the first four models came back with MaxRhat = NA first... 
+
+```{r}
+
+ID <- 2
+jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
+                            out.names[ID], "_FL.rds"))
+
+mcmc_trace(jm$samples, c("a0.1[1]", "a1.1[1]", "a0.2[1]", "a1.2[1]"))  
+```
+
+
+```{r}
+mcmc_trace(jm$samples, c("a0.1[10]", "a1.1[10]", 
+                         "a0.2[10]", "a1.2[10]"))  
+```
+
+
+```{r}
+mcmc_trace(jm$samples, c("delta1", "delta2", "beta[1]", "beta[2]"))  
+
+```
+
+```{r}
+mcmc_trace(jm$samples, c("sigma.a0.1", "sigma.a1.1", 
+                         "sigma.a0.2", "sigma.a1.2"))  
+
+```
+
+```{r}
+mcmc_trace(jm$samples, c("year.change"))  
+```
+
+This is a problem... :( 
 
 
 <!-- Or use the estimated mu directly: -->

@@ -17,7 +17,7 @@ library(lubridate)
 library(jagsUI)
 library(bayesplot)
 library(stringr)
-save.fig <- T
+save.fig <- F
 
 source("Caribbean_Dc_fcns.R")
 
@@ -651,7 +651,7 @@ parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
                 "beta", "B.1", "B.2", 
                 "delta1", "delta2", 
                 "year.change",
-                "epsilon", "sigma.e",
+                "sigma.e",
                 "sigma.a0.1", "sigma.a1.1", 
                 "sigma.a0.2", "sigma.a1.2", "loglik")
 
@@ -662,12 +662,12 @@ FL.jags.data.2slopes <- list(N = length(FL.nest.counts$nests),
                              yearc = median.yr$year - min(median.yr$min.yr),
                              latc = FL.lat.dat$latc,
                              latc2 = FL.lat.dat$latc2,
-                             minT = 15,
-                             maxT = 35)
+                             minT = 25, maxT = 37)
 
 
 # For these models, years have to be the same across the board because 
-# I assume the change point is happening the same at all beaches
+# I assume the change point is happening at the same time for all beaches
+# 1979 = 0
 
 #jm <- list(length = length(out.names))
 loo.out <- list()

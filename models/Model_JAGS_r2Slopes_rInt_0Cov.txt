@@ -25,7 +25,7 @@ model{
 	}
 
 	for(j in 1:nbeach){
-			a0.1[j] <- B.1[j,1]
+		a0.1[j] <- B.1[j,1]
 		a1.1[j] <- B.1[j,2]
 		B.1[j,1:2] ~ dmnorm(B.1.hat[j,], Tau.B.1[,])
 		
@@ -89,6 +89,7 @@ model{
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
 
-	year.change ~ dpois(minT + (maxT-minT)/2)
+	#year.change ~ dpois(minT + (maxT-minT)/2)
+	year.change ~ dunif(minT, maxT)
 
 }

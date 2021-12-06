@@ -108,5 +108,6 @@ model{
 	
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
-	year.change ~ dpois(minT + (maxT-minT)/2)
+	#year.change ~ dpois(minT + (maxT-minT)/2)
+	year.change ~ dunif(minT, maxT)
 }

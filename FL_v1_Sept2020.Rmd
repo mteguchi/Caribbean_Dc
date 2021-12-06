@@ -740,11 +740,11 @@ looic.df.Poi.2slopes
 ```
 
 
-The 2-covariate model with log-distance and Day of the week seems best, although the first four models came back with MaxRhat = NA first... 
+The 3-covariate model seems best, although the first four models came back with MaxRhat = NA first... 
 
 ```{r}
 
-ID <- 2
+ID <- 1
 jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
                             out.names[ID], "_FL.rds"))
 
@@ -773,7 +773,12 @@ mcmc_trace(jm$samples, c("sigma.a0.1", "sigma.a1.1",
 mcmc_trace(jm$samples, c("year.change"))  
 ```
 
-This is a problem... :( 
+When using a POI prior for year.change, the posterior density was on one point (mean value). Using the uniform prior, it seemed to converge fine between 30 and 31. So, that's a lot better. Although the density is flat between 30 and 31... prior was from 25 to 37. 
+
+```{r}
+mcmc_dens(jm$samples, c("year.change"))
+```
+
 
 
 <!-- Or use the estimated mu directly: -->

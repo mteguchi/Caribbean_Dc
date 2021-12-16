@@ -353,22 +353,48 @@ How can I make the model more flexible?
 
 I tried the negative binomial distribution in a couple ways instead of Poisson but it didn't work as expected. I might have used the distribution incorrectly. Kelly wanted to use the same model as before so let's move on for now. 
 
-For STX, I used log-normal distribution and they worked better than the Poisson models. So, I'll give that a try for FL data.
+For STX, I used log-normal distribution and they worked better than the Poisson models. So, I'll give that a try for FL data. None of them converged so sticking with the Poisson models. 
 
+
+One thing I noticed at this point is that many have the same pattern where the nest counts started to decline around 2010. 
+
+As I did for the STX dataset, it may be good to have two slopes with a change-point parameter. 
 
 ```{r}
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "B.1", "B.2", 
+                "delta1", "delta2", 
+                "year.change",
+                "sigma.e",
+                "sigma.a0.1", "sigma.a1.1", 
+                "sigma.a0.2", "sigma.a1.2", "loglik")
+
+FL.jags.data.2slopes <- list(N = length(FL.nest.counts$nests),
+                             nbeach = length(unique(FL.nest.counts$ID2)),
+                             count = FL.nest.counts$nests,
+                             beach = FL.nest.counts$ID2,
+                             yearc = median.yr$year - min(median.yr$min.yr),
+                             latc = FL.lat.dat$latc,
+                             latc2 = FL.lat.dat$latc2,
+                             minT = 25, maxT = 37)
+
+
+# For these models, years have to be the same across the board because 
+# I assume the change point is happening at the same time for all beaches
+# 1979 = 0
+
+#jm <- list(length = length(out.names))
 loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
-FL.jags.data$log.count <- log(FL.jags.data$count + 1)
-
+k <- 1
 for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_LogNorm_rSlope_rInt_",
+  MCMC.params$model.file = paste0("models/Model_JAGS_r2Slopes_rInt_",
                                   model.names[k], ".txt")
-  FL.jags.data$X <- X.FL[[k]]
+  FL.jags.data.2slopes$X <- X.FL[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_LogNorm_rSlope_rInt_", 
+  if (!file.exists(paste0("RData/JAGS_out_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))){
-    jm <- jags(data = FL.jags.data,
+    jm <- jags(data = FL.jags.data.2slopes,
                #inits = inits,
                parameters.to.save= parameters,
                model.file = MCMC.params$model.file,
@@ -380,27 +406,27 @@ for (k in 1:length(out.names)){
                parallel=T)
     
     saveRDS(jm, 
-            file = paste0("RData/JAGS_out_LogNorm_rSlope_rInt_", 
+            file = paste0("RData/JAGS_out_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))
     
   } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_rSlope_rInt_",
+    jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
                                 out.names[k], "_FL.rds"))
   }
 
-  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
+  Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)), na.rm = T)
   
-  if (!file.exists(paste0("RData/LOOIC_LogNorm_rSlope_rInt_", 
+  if (!file.exists(paste0("RData/LOOIC_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
                                   data.vector = FL.jags.data$count, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_LogNorm_rSlope_rInt_",
+            file = paste0("RData/LOOIC_r2Slopes_rInt_",
                           out.names[k], "_FL.rds"))
     
   } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_LogNorm_rSlope_rInt_",
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_r2Slopes_rInt_",
                                           out.names[k], "_FL.rds"))
   }
   
@@ -415,172 +441,68 @@ loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
          %>% select(Estimate)) %>%
   unlist()
 
-looic.df.Norm <- data.frame(ID = seq(1, length(model.names)),
-                           model = model.names,
-                           cov = out.names,
-                           looic = loo.all,
-                           MaxRhat = Rmax) %>%
+looic.df.Poi.2slopes <- data.frame(ID = seq(1, length(model.names)),
+                                   model = model.names,
+                                   cov = out.names,
+                                   looic = loo.all,
+                                   MaxRhat = Rmax,
+                                   dLOOIC = loo.all - min(loo.all)) %>%
   arrange(-desc(looic))
 
 
-```
+looic.df.Poi.2slopes
 
-```{r}
-looic.df.Norm
-```
-
-None of these converged... 
-
-Stick with the Poisson models. 
-
-START HERE 2021-11-06
-
-
-```{r}
-mcmc_trace(jm$samples, c("beta[1]", "beta[2]", "beta[3]" ))
-```
-
-These look okay. 
-
-Take a look at the over-dispersion variance parameter.
-
-```{r}
-mcmc_dens(jm$samples, pars = "sigma.e")
-```
-
-It's a little greater than 0, but not much... So, we can ignore overdispersion?
-
-Extract population growth parameters. 
-
-```{r}
-FL.summary.df <- data.frame(jm$summary) %>%
-  rownames_to_column("Parameter")
-
-FL.summary.df %>% 
-  filter(str_detect(Parameter, pattern = "a1pc")) %>%
-  rownames_to_column("beach") %>% #-> tmp #
-  transmute(ID = as.numeric(beach),
-            mean_a1pc = mean,
-            sd_a1pc = sd,
-            low25_a1pc = X2.5.,
-            median_a1pc = X50.,
-            upper975_a1pc = X97.5.)-> FL.a1pc
-
-FL.a1pc %>% 
-  left_join(FL.lat.dat, by = "ID") %>%
-  arrange(ID) -> FL.a1pc
-
-FL.summary.df %>% 
-  filter(str_detect(Parameter, pattern = "mu.a1")) %>%
-  rownames_to_column("beach") %>%
-  transmute(ID = as.numeric(beach),
-            mean_mu.a1 = mean,
-            sd_mu.a1 = sd,
-            low25_mu.a1 = X2.5.,
-            median_mu.a1 = X50.,
-            upper975_mu.a1 = X97.5.)-> FL.mu.a1
-
-FL.mu.a1 %>% left_join(FL.lat.dat, by = "ID") %>%
-  arrange(ID) -> FL.mu.a1
-
-#head(a1pc.2008)
 ```
 
 
-Look at the beach specific annual growth rate in %:
+The 3-covariate model seems best, although the first four models came back with MaxRhat = NA first... 
 
 ```{r}
 
-ggplot() + 
-  geom_point(data = FL.a1pc, 
-             aes(x = beach, y = mean_a1pc,
-             color = latc)) + 
-  geom_errorbar(data = FL.a1pc,
-                aes(ymin = low25_a1pc,
-                    ymax = upper975_a1pc,
-                    x = beach,
-                    color = latc)) + 
-  ylab("Annual average growth rate (%) and 95% CI") + 
-  xlab("Beach ID")
+ID <- 1
+jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
+                            out.names[ID], "_FL.rds"))
+
+mcmc_trace(jm$samples, c("a0.1[1]", "a1.1[1]", "a0.2[1]", "a1.2[1]"))  
 ```
 
-Create a table with beach names:
 
 ```{r}
-FL.a1pc %>% select(ID, name, mean_a1pc, sd_a1pc, low25_a1pc, upper975_a1pc) -> FL.table
-
-#write_csv(FL.table, path = "data/FL_growth_rates_Sept2020.csv")
+mcmc_trace(jm$samples, c("a0.1[10]", "a1.1[10]", 
+                         "a0.2[10]", "a1.2[10]"))  
 ```
 
-Visualize FL output to see if they make sense.
-
-<!-- ```{r} -->
-<!-- # For each beach, extract data, plot, then overlay predicted growth. -->
-
-<!-- beta.1 <- summary.beta1.df$mean -->
-<!-- beta.2 <- summary.beta2.df$mean -->
-<!-- beta.3 <- summary.beta3.df$mean -->
-<!-- Beta <- c(beta.1, beta.2, beta.3) -->
-<!-- k <- 3 -->
-<!-- for (k in 1:FL.jags.data$nbeach){ -->
-<!--   tmp <- FL.nest.counts %>% filter(ID == k) -->
-<!--   # slope -->
-<!--   a1.tmp <- FL.mu.a1 %>% filter(ID == k) %>% select(mean_mu.a1)  -->
-<!--   # intercept -->
-<!--   a0.tmp <- summary.a0.df %>% filter(ID == k) %>% select(mean) -->
-<!--   # covariates -->
-<!--   X.tmp <- X[FL.nest.counts$ID == k,] -->
-<!--   # years -->
-<!--   yr.tmp <- tmp$year - min(tmp$year) -->
-<!--   mu.tmp <- exp(rep(unlist(a0.tmp), length(yr.tmp)) +  -->
-<!--     yr.tmp * rep(unlist(a1.tmp), length(yr.tmp)) +  -->
-<!--     X.tmp %*% Beta) -->
-
-<!--   tmp$mu <- mu.tmp -->
-<!--   ggplot(data = tmp) + -->
-<!--     geom_point(aes(x = year, y = nests)) +  -->
-<!--     geom_path(aes(x = year, y = mu)) + -->
-<!--     labs(title = tmp$beach[1]) +  -->
-<!--     ylab("# nests") + xlab("") -->
-
-<!--   beach.name <- str_replace(tmp$beach[1], "/", "_") -->
-
-
-<!--   ggsave(filename = paste0("figures/", beach.name, ".png"), -->
-<!--          device = "png", dpi = 600) -->
-<!-- } -->
-
-
-<!-- ``` -->
-
-Or use the estimated mu directly:
 
 ```{r}
-
-# For each beach, extract data, plot, then overlay predicted growth.
-
-k <- 3
-for (k in 1:FL.jags.data$nbeach){
-  tmp <- FL.nest.counts %>% filter(ID == k)
-
-  summary.mu.df %>% filter(beach == k) %>% 
-    select(mean) -> mu.tmp
-    
-  tmp$mu <- mu.tmp$mean
-  ggplot(data = tmp) +
-    geom_point(aes(x = year, y = nests)) + 
-    geom_path(aes(x = year, y = mu)) +
-    labs(title = tmp$beach[1]) + 
-    ylab("# nests") + xlab("")
-
-  beach.name <- str_replace(tmp$beach[1], "/", "_")
-  
-
-  ggsave(filename = paste0("figures/", beach.name, "_mu.png"),
-         device = "png", dpi = 600)
-}
-
+mcmc_trace(jm$samples, c("delta1", "delta2", "beta[1]", "beta[2]"))  
 
 ```
+
+```{r}
+mcmc_trace(jm$samples, c("sigma.a0.1", "sigma.a1.1", 
+                         "sigma.a0.2", "sigma.a1.2"))  
+
+```
+
+```{r}
+mcmc_trace(jm$samples, c("year.change"))  
+```
+
+When using a POI prior for year.change, the posterior density was on one point (mean value). Using the uniform prior, it seemed to converge fine between 30 and 31. So, that's a lot better. Although the density is flat between 30 and 31... prior was from 25 to 37. 
+
+```{r}
+mcmc_dens(jm$samples, c("year.change"))
+```
+
+
+Goodness-of-fit
+
+```{r}
+prop.high.pareto.k.Poisson <- sum(loo.out[[looic.df.Poi.2slopes[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
+
+plot(loo.out[[looic.df.Poi.2slopes[1,"ID"]]]$loo.out)
+```
+
+There are some high values... 
 
 

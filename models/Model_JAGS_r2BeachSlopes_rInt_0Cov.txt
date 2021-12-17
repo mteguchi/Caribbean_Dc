@@ -15,7 +15,7 @@ model{
 	for(i in 1:N){
 		count[i] ~ dpois(mu[i])
 		resid[i] <- count[i] - mu[i]  # computes residuals
-				log(mu[i]) <- ifelse(yearc[i] < year.change[i],
+				log(mu[i]) <- ifelse(yearc[i] < year.change[beach[i]],
 		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + epsilon[i],
 		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + epsilon[i])
 
@@ -54,7 +54,7 @@ model{
 		rea0.2[j] <- a0.2[j] - mu.a0.2
 		rea1.2[j] <- a1.2[j] - mu.a1.2[j]
 
-	  year.change[i] ~ dunif(minT, maxT)
+	  	year.change[j] ~ dunif(minT, maxT)
 
 	}
 

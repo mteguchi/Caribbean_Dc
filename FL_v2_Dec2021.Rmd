@@ -71,17 +71,20 @@ FL.nest.counts.0 %>%
             median.yr = median(year),
             min.yr = min(year),
             n = n()) %>%
-  filter(min.yr > 1996) %>%
+  filter(min.yr < 1997) %>%
+  rownames_to_column(var = "ID3") %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2,
          beach = ID,
          ID2 = ID2,
-         name = name) -> FL.lat.dat
+         ID3 = as.integer(ID3),
+         name = name)  -> FL.lat.dat
 
 median.yr <- select(FL.lat.dat, 
-                    c(ID, median.yr, min.yr)) %>%
+                    c(ID, ID3, median.yr, min.yr)) %>%
   right_join(FL.nest.counts.0, by = "ID") %>% 
-  select(ID, median.yr, min.yr, year)
+  select(ID, ID3, median.yr, min.yr, year) %>%
+  na.omit()
 
 # changed from centering to left-adjusted for years. 
 # I think t >= 0 makes more sense explaining the 
@@ -96,10 +99,11 @@ FL.nest.counts.0 %>% filter(ID %in% FL.lat.dat$ID) -> FL.nest.counts
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
                      count = FL.nest.counts$nests,
-                     beach = FL.nest.counts$ID2,
-                     yearc = median.yr$year - min.yr,
+                     beach = median.yr$ID3,
+                     yearc = median.yr$year - min(median.yr$min.yr),
                      latc = FL.lat.dat$latc,
-                     latc2 = FL.lat.dat$latc2)
+                     latc2 = FL.lat.dat$latc2,
+                     minT = 5, maxT = 15)
 
 data.vector <- FL.jags.data$count %>% 
   rep(each = MCMC.params$n.chains * n.per.chain)

@@ -495,14 +495,23 @@ mcmc_dens(jm$samples, c("year.change"))
 ```
 
 
+
 Goodness-of-fit
 
 ```{r}
-prop.high.pareto.k.Poisson <- sum(loo.out[[looic.df.Poi.2slopes[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
+prop.high.pareto.k.Poisson <- sum(loo.out[[looic.df.Poi.2slopes[1, "ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
 
 plot(loo.out[[looic.df.Poi.2slopes[1,"ID"]]]$loo.out)
 ```
 
 There are some high values... 
+
+Is this acceptable?
+
+What if we have site-specific change in slopes? Some locations don't have sufficient data to make two slopes. So, I need to filter out beaches that have sufficient data for this analysis. I wonder if it's worth spending that much time... 
+
+FL_PR_STX_v0_Sept2020.Rmd contains all time series, although the plots are in the log scale. The hypothesis is that if the change in trends happened around the same time as what was found in STX. At Sandy Point, STX, the change point happened around 20-30 years since 1982 (2002 - 2012). So, we want to have time series that contains at least 5 years before (1997) and 5 years after (2017). 
+
+I'm going to start a new document for this part of the analysis - FL_v2_Dec2021.Rmd.
 
 

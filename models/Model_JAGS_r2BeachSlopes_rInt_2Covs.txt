@@ -4,24 +4,24 @@
 # adjusted model  - now computes residuals and computes bayesian p-value using deviance
 
 # converted to run in JAGS - TE
-# Random effects for slope and intercept and takes no covariate. 
+# Random effects for slope and intercept and takes 2 covariates. 
 
 # 2020-03-10
-# 2020-09-10 Modified to make it without covariates
-# 2021-12-01 Modified to have two slopes 
+# 2021-12-01 Converted to 2 slope model
 
 model{
 	for(i in 1:N){
 		count[i] ~ dpois(mu[i])
 		resid[i] <- count[i] - mu[i]  # computes residuals
-				log(mu[i]) <- ifelse(yearc[i] < year.change,
-		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + epsilon[i],
-		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + epsilon[i])
+		log(mu[i]) <- ifelse(yearc[i] < year.change,
+		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + epsilon[i],
+		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + epsilon[i])
 
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
 		loglik[i] <- logdensity.pois(count[i], mu[i])
+
 	}
 
 	for(j in 1:nbeach){
@@ -53,11 +53,18 @@ model{
 		rea0.2[j] <- a0.2[j] - mu.a0.2
 		rea1.2[j] <- a1.2[j] - mu.a1.2[j]
 
+    year.change[i] ~ dunif(minT, maxT)
+
+	}
+
+	for(k in 1:2){
+		beta[k] ~ dnorm(0, 0.01)
+		effpc[k] <- (exp(beta[k])-1) * 100
 	}
 
 	delta1 ~ dnorm(0, 0.01)
 	delta2 ~ dnorm(0, 0.01)
-
+	
 	m.a1.1 ~ dnorm(0, 0.01)
 	mu.a0.1 ~ dnorm(0, 0.01)
 	
@@ -85,11 +92,8 @@ model{
 	
 	rho.1 ~ dunif(-1, 1)
 	rho.2 ~ dunif(-1, 1)
-	
+
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.5) #dunif(0, 100)
-
-	#year.change ~ dpois(minT + (maxT-minT)/2)
-	year.change ~ dunif(minT, maxT)
 
 }

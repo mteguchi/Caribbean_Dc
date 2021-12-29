@@ -49,7 +49,9 @@ FL.nest.counts.0 <- read_csv("data/FL_Sept2020.csv",
          ID2 = as.numeric(as.factor(ID)))
 
 # This is the minimum year that we want to have for each dataset
-min.yr <- 1997  
+year.1 <- 1997
+# This is the upper minimum year  
+year.2 <- 2017
 ```
 
 Change in abundance over time at each beach can be seen in FL_PR_STX_v0_Sept2020.Rmd. 
@@ -70,8 +72,9 @@ FL.nest.counts.0 %>%
             latitude = first(latitude),
             median.yr = median(year),
             min.yr = min(year),
+            max.yr = max(year),
             n = n()) %>%
-  filter(min.yr > 1996) %>%
+  filter(min.yr <= year.1 & max.yr >= year.2) %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2,
          beach = ID,
@@ -80,7 +83,7 @@ FL.nest.counts.0 %>%
 
 median.yr <- select(FL.lat.dat, 
                     c(ID, median.yr, min.yr)) %>%
-  right_join(FL.nest.counts.0, by = "ID") %>% 
+  left_join(FL.nest.counts.0, by = "ID") %>% 
   select(ID, median.yr, min.yr, year)
 
 # changed from centering to left-adjusted for years. 
@@ -97,7 +100,7 @@ FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
                      count = FL.nest.counts$nests,
                      beach = FL.nest.counts$ID2,
-                     yearc = median.yr$year - min.yr,
+                     yearc = median.yr$year - min(median.yr$year),
                      latc = FL.lat.dat$latc,
                      latc2 = FL.lat.dat$latc2)
 
@@ -231,7 +234,7 @@ looic.df.Poi
 ```
 
 
-Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? Not really... 
+Looks like the 2 covariate model with log of distance and day of the week as covariates is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? Not really... 
 
 ```{r}
 sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)

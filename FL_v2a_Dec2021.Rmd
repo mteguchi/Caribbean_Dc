@@ -75,16 +75,19 @@ FL.nest.counts.0 %>%
             max.yr = max(year),
             n = n()) %>%
   filter(min.yr <= year.1 & max.yr >= year.2) %>%
+  rownames_to_column(var = "ID3") %>%
   mutate(latc = latitude - mean(latitude),
          latc2 = latc^2,
          beach = ID,
          ID2 = ID2,
+         ID3 = as.integer(ID3),
          name = name) -> FL.lat.dat
 
 median.yr <- select(FL.lat.dat, 
-                    c(ID, median.yr, min.yr)) %>%
+                    c(ID, ID3, median.yr, min.yr)) %>%
   left_join(FL.nest.counts.0, by = "ID") %>% 
-  select(ID, median.yr, min.yr, year)
+  select(ID, ID3, median.yr, min.yr, year) %>%
+  na.omit()
 
 # changed from centering to left-adjusted for years. 
 # I think t >= 0 makes more sense explaining the 
@@ -99,7 +102,7 @@ FL.nest.counts.0 %>% filter(ID %in% FL.lat.dat$ID) -> FL.nest.counts
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
                      count = FL.nest.counts$nests,
-                     beach = FL.nest.counts$ID2,
+                     beach = median.yr$ID3,
                      yearc = median.yr$year - min(median.yr$year),
                      latc = FL.lat.dat$latc,
                      latc2 = FL.lat.dat$latc2,
@@ -108,14 +111,10 @@ FL.jags.data <- list(N = length(FL.nest.counts$nests),
 data.vector <- FL.jags.data$count %>% 
   rep(each = MCMC.params$n.chains * n.per.chain)
 
-parameters <- c("a0", "a1", "beta", "B.hat", "a1pc",
-                "mu.a0", "mu.a1", "mu",
-                "rea0", "rea1",
+parameters <- c("a0.1", "a1.1", "a0.2", "a1.2",
+                "beta", "r", "year.change", "mu",
                 "delta1", "delta2",
-                "sigma.e", "Sigma.B",
-                "sigma.a0", "sigma.a1",
-                "floridapc", "probP", "deviance",
-                "Devobs", "Devpred", "loglik")
+                "sigma.e", "deviance", "loglik")
 
 ```
 
@@ -235,8 +234,36 @@ looic.df.Poi
 ```
 
 
-Looks like the 2 covariate model with log of distance and day of the week as covariates is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned? Not really... 
+Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned?  
 
 ```{r}
 sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
 ```
+
+
+
+
+```{r}
+
+plot(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out)
+
+```
+
+
+Not sure if I should be concerned about these or just ignore them and move on... 
+
+Make plots between observed and predicted for all beaches.
+
+
+```{r}
+jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
+                                out.names[looic.df.Poi[1,"ID"]],
+                                 "_FL.rds"))
+
+mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]")) 
+                         "year.change[1]", 
+                         "sigma.e"))
+```
+
+
+

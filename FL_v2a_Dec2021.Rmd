@@ -233,6 +233,19 @@ Then... use LOOIC or DIC to compare these models.
 looic.df.Poi
 ```
 
+Max Rhat values seem a bit high for many. The logD + DayWk model fitted best. 
+
+```{r}
+jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
+                                out.names[looic.df.Poi[1,"ID"]],
+                                 "_FL.rds"))
+
+mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]")) 
+                         "year.change[1]", 
+                         "sigma.e"))
+
+```
+
 
 Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned?  
 

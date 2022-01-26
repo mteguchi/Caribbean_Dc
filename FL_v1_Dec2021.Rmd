@@ -488,7 +488,7 @@ mcmc_trace(jm$samples, c("sigma.a0.1", "sigma.a1.1",
 mcmc_trace(jm$samples, c("year.change"))  
 ```
 
-When using a POI prior for year.change, the posterior density was on one point (mean value). Using the uniform prior, it seemed to converge fine between 30 and 31. So, that's a lot better. Although the density is flat between 30 and 31... prior was from 25 to 37. 
+When using a POI prior for year.change, the posterior density was on one point (mean value). Using the uniform prior, it seemed to converge fine between 30 and 31. So, that's a lot better. Although the density is flat between 30 and 31, which makes kinda sense... prior was from 25 to 37. 
 
 ```{r}
 mcmc_dens(jm$samples, c("year.change"))

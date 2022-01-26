@@ -48,9 +48,8 @@ FL.nest.counts.0 <- read_csv("data/FL_Sept2020.csv",
          dataset = "FL",
          ID2 = as.numeric(as.factor(ID)))
 
-# This is the minimum year that we want to have for each dataset
+# a dataset should contain at least from 1997 - 2017. Longer the better.
 year.1 <- 1997
-# This is the upper minimum year  
 year.2 <- 2017
 ```
 
@@ -99,6 +98,9 @@ median.yr <- select(FL.lat.dat,
 
 FL.nest.counts.0 %>% filter(ID %in% FL.lat.dat$ID) -> FL.nest.counts
 
+# min(median.yr$year) = 1979. So, minT and maxT should be 23 (2002-1979)
+# and 33 (2012-1979), where the inflection seemed to happen between 
+# 2002 and 2012. 
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
                      count = FL.nest.counts$nests,
@@ -106,7 +108,7 @@ FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      yearc = median.yr$year - min(median.yr$year),
                      latc = FL.lat.dat$latc,
                      latc2 = FL.lat.dat$latc2,
-                     minT = 5, maxT = 15)
+                     minT = 23, maxT = 33)
 
 data.vector <- FL.jags.data$count %>% 
   rep(each = MCMC.params$n.chains * n.per.chain)
@@ -240,13 +242,59 @@ jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
                                 out.names[looic.df.Poi[1,"ID"]],
                                  "_FL.rds"))
 
-mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]")) 
+# Make a look up table for beach name vs beach ID vs jags' beach ID
+
+FL.nest.counts %>% select(ID, beach_f) %>%
+  mutate(ID_f = as.factor(ID)) %>%
+  group_by(ID_f) %>%
+  arrange(ID) %>%
+  filter(row_number() == 1) -> FL_beach_ID
+
+FL_beach_ID$jagsID <- unique(FL.jags.data$beach)
+mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]", 
                          "year.change[1]", 
                          "sigma.e"))
 
 ```
 
+Look at the data for beach 1
 
+```{r}
+beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == 1],
+                         year = FL.jags.data$yearc[FL.jags.data$beach == 1] + min(median.yr$year))
+
+ggplot(data = beach.data) + 
+  geom_path(aes(x = year, y = counts))
+```
+
+It makes sense that there was no info on year.change. 
+
+Look at other beaches that had significant changes in counts. 
+
+```{r}
+FL.nest.counts %>% filter(beach_f == "HUTCHINSON ISL (ST. LUCIE)") %>% head()
+```
+
+
+```{r}
+ID <- 22
+jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
+mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
+                         paste0("a1.2[", jagsID, "]"), 
+                         paste0("year.change[", jagsID, "]"), 
+                         "sigma.e"))
+
+```
+
+
+```{r}
+beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == jagsID],
+                         year = FL.jags.data$yearc[FL.jags.data$beach == jagsID])
+
+# + min(median.yr$year)
+ggplot(data = beach.data) + 
+  geom_path(aes(x = year, y = counts))
+```
 Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned?  
 
 ```{r}

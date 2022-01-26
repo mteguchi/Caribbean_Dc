@@ -273,7 +273,7 @@ jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
                                 out.names[looic.df.Poi[1,"ID"]],
                                  "_FL.rds"))
 
-mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]")) 
+mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]", 
                          "year.change[1]", 
                          "sigma.e"))
 ```

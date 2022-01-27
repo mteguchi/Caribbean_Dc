@@ -235,7 +235,7 @@ Then... use LOOIC or DIC to compare these models.
 looic.df.Poi
 ```
 
-Max Rhat values seem a bit high for many. The logD + DayWk model fitted best. 
+Max Rhat values seem a bit high for many. The logD + DayYr model fitted best. 
 
 ```{r}
 jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
@@ -288,13 +288,52 @@ mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"),
 
 
 ```{r}
+ID <- 22
+jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
+mcmc_dens(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
+                         paste0("a1.2[", jagsID, "]"), 
+                         paste0("year.change[", jagsID, "]"), 
+                         "sigma.e"))
+
+```
+
+
+```{r}
 beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == jagsID],
                          year = FL.jags.data$yearc[FL.jags.data$beach == jagsID])
 
 # + min(median.yr$year)
 ggplot(data = beach.data) + 
   geom_path(aes(x = year, y = counts))
+
+
 ```
+
+Looks like the posterior for year.change is picking up a dip around year 27. 
+
+```{r}
+Jupiter_Beach_ID <- grep("JUPITER", FL_beach_ID$beach_f)
+ID <- FL_beach_ID$ID[Jupiter_Beach_ID[1]]
+jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
+mcmc_dens(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
+                         paste0("a1.2[", jagsID, "]"), 
+                         paste0("year.change[", jagsID, "]"), 
+                         "sigma.e"))
+
+```
+
+
+```{r}
+beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == jagsID],
+                         year = FL.jags.data$yearc[FL.jags.data$beach == jagsID])
+
+# + min(median.yr$year)
+ggplot(data = beach.data) + 
+  geom_path(aes(x = year, y = counts))
+
+
+```
+
 Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned?  
 
 ```{r}

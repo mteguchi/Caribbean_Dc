@@ -3,7 +3,7 @@ title: "FL_v2_Dec2021; Site-specific 2 slope models for FL"
 output: html_notebook
 ---
 
-What if we have site-specific change in slopes? Some locations don't have sufficient data to make two slopes. So, I need to filter out beaches that have sufficient data for this analysis. I wonder if it's worth spending that much time... 
+In v2a, I looked at site-specific change in slopes. It appeared that the year.change parameter was not converging well. Posteriors were quite diffuse over the parameter space. In this version, I use a single year.change parameter for all locations. 
 
 FL_PR_STX_v0_Sept2020.Rmd contains all time series, although the plots are in the log scale. The hypothesis is that if the change in trends happened around the same time as what was found in STX. At Sandy Point, STX, the change point happened around 20-30 years since 1982 (2002 - 2012). So, we want to have time series that contains at least 5 years before (1997) and 5 years after (2017). 
 
@@ -20,7 +20,7 @@ library(bayesplot)
 library(stringr)
 
 source("Caribbean_Dc_fcns.R")
-
+save.fig <- T
 MCMC.params <- list(n.samples = 75000,
                     n.burnin = 55000,
                     n.thin = 5,
@@ -163,11 +163,11 @@ loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
 
 for (k in 1:length(out.names)){
-  MCMC.params$model.file = paste0("models/Model_JAGS_r2BeachSlopes_rInt_",
+  MCMC.params$model.file = paste0("models/Model_JAGS_r2Slopes_rInt_",
                                   model.names[k], ".txt")
   FL.jags.data$X <- X.FL[[k]]
 
-  if (!file.exists(paste0("RData/JAGS_out_r2BeachSlopes_rInt_", 
+  if (!file.exists(paste0("RData/JAGS_out_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))){
     jm <- jags(data = FL.jags.data,
                #inits = inits,
@@ -181,27 +181,27 @@ for (k in 1:length(out.names)){
                parallel=T)
     
     saveRDS(jm, 
-            file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_", 
+            file = paste0("RData/JAGS_out_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))
     
   } else {
-    jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
+    jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
                                 out.names[k], "_FL.rds"))
   }
 
   Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
   
-  if (!file.exists(paste0("RData/LOOIC_r2BeachSlopes_rInt_", 
+  if (!file.exists(paste0("RData/LOOIC_r2Slopes_rInt_", 
                           out.names[k], "_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
                                   data.vector = FL.jags.data$count, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
-            file = paste0("RData/LOOIC_r2BeachSlopes_rInt_",
+            file = paste0("RData/LOOIC_r2Slopes_rInt_",
                           out.names[k], "_FL.rds"))
     
   } else {
-    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_r2BeachSlopes_rInt_",
+    loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_r2Slopes_rInt_",
                                           out.names[k], "_FL.rds"))
   }
   
@@ -235,116 +235,15 @@ Then... use LOOIC or DIC to compare these models.
 looic.df.Poi
 ```
 
-Max Rhat values seem a bit high for many. The logD + DayYr model fitted best. 
+Looks like the 3 covariate model is the best. Rhat statistics look fine. 
 
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
-                                out.names[looic.df.Poi[1,"ID"]],
-                                 "_FL.rds"))
+high_pareto_k <- sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
 
-# Make a look up table for beach name vs beach ID vs jags' beach ID
-
-FL.nest.counts %>% select(ID, beach_f) %>%
-  mutate(ID_f = as.factor(ID)) %>%
-  group_by(ID_f) %>%
-  arrange(ID) %>%
-  filter(row_number() == 1) -> FL_beach_ID
-
-FL_beach_ID$jagsID <- unique(FL.jags.data$beach)
-mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]", 
-                         "year.change[1]", 
-                         "sigma.e"))
-
+high_pareto_k
 ```
 
-Look at the data for beach 1
-
-```{r}
-beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == 1],
-                         year = FL.jags.data$yearc[FL.jags.data$beach == 1] + min(median.yr$year))
-
-ggplot(data = beach.data) + 
-  geom_path(aes(x = year, y = counts))
-```
-
-It makes sense that there was no info on year.change. 
-
-Look at other beaches that had significant changes in counts. 
-
-```{r}
-FL.nest.counts %>% filter(beach_f == "HUTCHINSON ISL (ST. LUCIE)") %>% head()
-```
-
-
-```{r}
-ID <- 22
-jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
-mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
-                         paste0("a1.2[", jagsID, "]"), 
-                         paste0("year.change[", jagsID, "]"), 
-                         "sigma.e"))
-
-```
-
-
-```{r}
-ID <- 22
-jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
-mcmc_dens(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
-                         paste0("a1.2[", jagsID, "]"), 
-                         paste0("year.change[", jagsID, "]"), 
-                         "sigma.e"))
-
-```
-
-
-```{r}
-beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == jagsID],
-                         year = FL.jags.data$yearc[FL.jags.data$beach == jagsID])
-
-# + min(median.yr$year)
-ggplot(data = beach.data) + 
-  geom_path(aes(x = year, y = counts))
-
-
-```
-
-Looks like the posterior for year.change is picking up a dip around year 27. 
-
-```{r}
-Jupiter_Beach_ID <- grep("JUPITER", FL_beach_ID$beach_f)
-ID <- FL_beach_ID$ID[Jupiter_Beach_ID[1]]
-jagsID <- FL_beach_ID$jagsID[FL_beach_ID$ID == ID]
-mcmc_dens(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
-                         paste0("a1.2[", jagsID, "]"), 
-                         paste0("year.change[", jagsID, "]"), 
-                         "sigma.e"))
-
-```
-
-
-```{r}
-beach.data <- data.frame(counts = FL.jags.data$count[FL.jags.data$beach == jagsID],
-                         year = FL.jags.data$yearc[FL.jags.data$beach == jagsID])
-
-# + min(median.yr$year)
-ggplot(data = beach.data) + 
-  geom_path(aes(x = year, y = counts))
-
-
-```
-
-Need to look at ways to remove year-to-year changes when computing the two slopes... maybe. 2022-01-26
-
-
-Looks like the 3 covariate model is the best. Pareto k statistic isn't great though... About 34% were > 0.7. Should we be concerned?  
-
-```{r}
-sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_k > 0.7)/length(FL.jags.data$count)
-```
-
-
-
+Pareto k statistic isn't great though... About `r round(high_pareto_k, 1) *100` % were > 0.7. Should we be concerned?  
 
 ```{r}
 
@@ -352,21 +251,130 @@ plot(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out)
 
 ```
 
-
 Not sure if I should be concerned about these or just ignore them and move on... 
 
-Make plots between observed and predicted for all beaches.
-
-
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_r2BeachSlopes_rInt_",
+jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
                                 out.names[looic.df.Poi[1,"ID"]],
                                  "_FL.rds"))
 
-mcmc_trace(jm$samples, c("a1.1[1]", "a1.2[1]", 
-                         "year.change[1]", 
-                         "sigma.e"))
+# Make a look up table for beach name vs beach ID vs jags' beach ID
+FL.nest.counts %>% select(ID, beach_f) %>%
+  mutate(ID_f = as.factor(ID)) %>%
+  group_by(ID_f) %>%
+  arrange(ID) %>%
+  filter(row_number() == 1) -> FL_beach_ID
+
+FL_beach_ID$jagsID <- unique(FL.jags.data$beach)
+
+# The 3-cov model is the first one in the list. 
+X <- X.FL[[1]]
+```
+
+Look at each beach:
+
+```{r}
+
+FL.summary.df <- data.frame(jm$summary) %>%
+  rownames_to_column("Parameter")
+
+# regular expression - ^mu means the beginning of a string has to be a0
+# \\[ are the escape characters for [, which is a reserved character. 
+# ([0-9]+) means numbers 
+# \\] also to literal ]
+summary.mu.df <- FL.summary.df[grep(pattern = "^mu\\[([0-9]+)\\]", 
+                                 x = FL.summary.df$Parameter),]
+
+# change point
+change.point.samples <- extract.samples("year.change", jm$samples)
+
+b <- 64
+for (b in 1:nrow(FL_beach_ID)){
+
+  jagsID <- b
+  beach.name <- FL_beach_ID[b, ] %>% pull(beach_f)
+  ID <- FL_beach_ID[b, ] %>% pull(ID) 
+  
+  trace.plot <- mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
+                                         paste0("a1.2[", jagsID, "]"), 
+                                         paste0("year.change"), 
+                                         "sigma.e")) + 
+    ggtitle(beach.name)
+
+  if (save.fig)
+    ggsave(trace.plot, 
+           filename = paste0("figures/trace_plot_beach_", ID, ".png"),
+           device = "png", dpi = 600)
+  
+  summary.mu.beach <- summary.mu.df[FL.jags.data$beach == jagsID,]
+  beach.data <- data.frame(Nests = FL.jags.data$count[FL.jags.data$beach == jagsID],
+                           Year = FL.jags.data$yearc[FL.jags.data$beach == jagsID] + min(median.yr$year),
+                           Mean = summary.mu.beach$mean,
+                           Low2.5 = summary.mu.beach$X2.5.,
+                           Median = summary.mu.beach$X50.,
+                           High97.5 = summary.mu.beach$X97.5.,
+                           X1 = X[FL.jags.data$beach == jagsID, 1],
+                           X2 = X[FL.jags.data$beach == jagsID, 2],
+                           X3 = X[FL.jags.data$beach == jagsID, 3])
+
+  # Create 95% band using the joint posteior:
+  a0.1.samples <- extract.samples(paste0("a0.1[", jagsID, "]"), jm$samples)
+  a0.2.samples <- extract.samples(paste0("a0.2[", jagsID, "]"), jm$samples)
+
+  a1.1.samples <- extract.samples(paste0("a1.1[", jagsID, "]"), jm$samples)
+  a1.2.samples <- extract.samples(paste0("a1.2[", jagsID, "]"), jm$samples)
+
+  beta.1.samples <- extract.samples("beta[1]", jm$samples)
+  beta.2.samples <- extract.samples("beta[2]", jm$samples)
+  beta.3.samples <- extract.samples("beta[3]", jm$samples)
+  
+  line.df <- data.frame(Year = as.numeric(),
+                        Mean = as.numeric(),
+                        low2.5 = as.numeric(),
+                        high97.5 = as.numeric())
+  
+  # a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
+  for (k in 0:(nrow(beach.data)-1)){
+    t <- beach.data[(k+1), "Year"] - min(beach.data$Year) #k + min(beach.data$Year)
+    if (t < median(change.point.samples)){
+      tmp <- a0.1.samples + a1.1.samples * t + beta.1.samples * beach.data$X1[k+1] + 
+        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1]
+    } else {
+      tmp <- a0.2.samples + a1.2.samples * t + beta.1.samples * beach.data$X1[k+1] + 
+        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1]
+    }
+    
+    line.df[k+1,] <- c(beach.data[(k+1), "Year"], mean(tmp), 
+                       quantile(tmp, c(0.025,0.975)))  
+  }
+
+  p.estimates <- ggplot() +
+    geom_point(data = beach.data, 
+               aes(x = Year, y = Nests), 
+               color = "red") +
+    geom_path(data = beach.data, 
+              aes(x = Year, y = Nests), 
+              color = "red") +
+    geom_ribbon(data = line.df, 
+                aes(x = Year, 
+                    ymin = exp(low2.5),
+                    ymax = exp(high97.5)),
+                fill = "orange", alpha = 0.4) +
+    geom_path(data = line.df, 
+              aes(x = Year, y = exp(Mean)),
+              size = 1.2) +
+    xlab("") + xlab("Number of nests") + 
+    ggtitle(beach.name) 
+  
+  
+  if (save.fig)
+    ggsave(p.estimates,
+           filename = paste0("figures/estimates_beach_", ID, ".png"),
+           device = "png", dpi = 600)
+}
+
+
 ```
 
 
-
+Some beaches don't look right... check what's going on. 2022-01-28

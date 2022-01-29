@@ -272,6 +272,22 @@ FL_beach_ID$jagsID <- unique(FL.jags.data$beach)
 X <- X.FL[[1]]
 ```
 
+
+Look at the common parameters:
+
+```{r}
+mcmc_trace(jm$samples, c("sigma.e", "year.change"))
+```
+
+
+```{r}
+mcmc_dens(jm$samples, c("sigma.e", "year.change"))
+
+```
+
+
+
+
 Look at each beach:
 
 ```{r}
@@ -279,7 +295,7 @@ Look at each beach:
 FL.summary.df <- data.frame(jm$summary) %>%
   rownames_to_column("Parameter")
 
-# regular expression - ^mu means the beginning of a string has to be a0
+# regular expression - ^mu means the beginning of a string has to be mu
 # \\[ are the escape characters for [, which is a reserved character. 
 # ([0-9]+) means numbers 
 # \\] also to literal ]
@@ -376,12 +392,11 @@ for (b in 1:nrow(FL_beach_ID)){
     xlab("") + ylab("Number of nests") +
     ggtitle(beach.name)
 
-
   if (save.fig)
     ggsave(p.estimates,
            filename = paste0("figures/estimates_beach_", ID, ".png"),
            device = "png", dpi = 600)
-  
+
   p.slope2.density <- ggplot() + 
     geom_density(data = data.frame(a1.2 = a1.2.samples),
                  aes(x = a1.2), color = "darkblue") +
@@ -395,6 +410,11 @@ for (b in 1:nrow(FL_beach_ID)){
     ggsave(p.slope2.density,
            filename = paste0("figures/slopes_density_", ID, ".png"),
            device = "png", dpi = 600)
+  
+  # Although the means (mus) are the parameter for Poisson distribution,
+  # plotting mus doesn't do well because they basically follow the same
+  # pattern as the data points - computing the mean value, without
+  # the error term provides the "means" that are smoothed over time
   
   # p.estimates.2 <- ggplot() +
   #   geom_point(data = beach.data,

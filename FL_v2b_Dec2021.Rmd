@@ -20,7 +20,7 @@ library(bayesplot)
 library(stringr)
 
 source("Caribbean_Dc_fcns.R")
-save.fig <- T
+save.fig <- F
 MCMC.params <- list(n.samples = 75000,
                     n.burnin = 55000,
                     n.thin = 5,
@@ -220,6 +220,7 @@ looic.df.Poi <- data.frame(ID = seq(1, length(model.names)),
                            model = model.names,
                            cov = out.names,
                            looic = loo.all,
+                           dLOOIC = loo.all - min(loo.all),
                            MaxRhat = Rmax) %>%
   arrange(-desc(looic))
 
@@ -288,25 +289,26 @@ summary.mu.df <- FL.summary.df[grep(pattern = "^mu\\[([0-9]+)\\]",
 # change point
 change.point.samples <- extract.samples("year.change", jm$samples)
 
-b <- 64
+b <- 24
 for (b in 1:nrow(FL_beach_ID)){
 
   jagsID <- b
   beach.name <- FL_beach_ID[b, ] %>% pull(beach_f)
   ID <- FL_beach_ID[b, ] %>% pull(ID) 
   
-  trace.plot <- mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
-                                         paste0("a1.2[", jagsID, "]"), 
-                                         paste0("year.change"), 
-                                         "sigma.e")) + 
-    ggtitle(beach.name)
+  # trace.plot <- mcmc_trace(jm$samples, c(paste0("a1.1[", jagsID, "]"), 
+  #                                        paste0("a1.2[", jagsID, "]"), 
+  #                                        paste0("year.change"), 
+  #                                        "sigma.e")) + 
+  #   ggtitle(beach.name)
 
-  if (save.fig)
-    ggsave(trace.plot, 
-           filename = paste0("figures/trace_plot_beach_", ID, ".png"),
-           device = "png", dpi = 600)
+  # if (save.fig)
+  #   ggsave(trace.plot, 
+  #          filename = paste0("figures/trace_plot_beach_", ID, ".png"),
+  #          device = "png", dpi = 600)
   
   summary.mu.beach <- summary.mu.df[FL.jags.data$beach == jagsID,]
+  
   beach.data <- data.frame(Nests = FL.jags.data$count[FL.jags.data$beach == jagsID],
                            Year = FL.jags.data$yearc[FL.jags.data$beach == jagsID] + min(median.yr$year),
                            Mean = summary.mu.beach$mean,
@@ -317,6 +319,7 @@ for (b in 1:nrow(FL_beach_ID)){
                            X2 = X[FL.jags.data$beach == jagsID, 2],
                            X3 = X[FL.jags.data$beach == jagsID, 3])
 
+  summary.mu.beach$Year <- beach.data$Year
   # Create 95% band using the joint posteior:
   a0.1.samples <- extract.samples(paste0("a0.1[", jagsID, "]"), jm$samples)
   a0.2.samples <- extract.samples(paste0("a0.2[", jagsID, "]"), jm$samples)
@@ -335,46 +338,91 @@ for (b in 1:nrow(FL_beach_ID)){
   
   # a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i]
   for (k in 0:(nrow(beach.data)-1)){
-    t <- beach.data[(k+1), "Year"] - min(beach.data$Year) #k + min(beach.data$Year)
+    # intercept is the same for all locations.
+    t <- beach.data[(k+1), "Year"] - min(median.yr$year) #k + min(beach.data$Year)
     if (t < median(change.point.samples)){
-      tmp <- a0.1.samples + a1.1.samples * t + beta.1.samples * beach.data$X1[k+1] + 
-        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1]
+      tmp <- exp(a0.1.samples + a1.1.samples * t + beta.1.samples * beach.data$X1[k+1] + 
+        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1])
+      
     } else {
-      tmp <- a0.2.samples + a1.2.samples * t + beta.1.samples * beach.data$X1[k+1] + 
-        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1]
+      tmp <- exp(a0.2.samples + a1.2.samples * t + beta.1.samples * beach.data$X1[k+1] + 
+        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1])
     }
     
-    line.df[k+1,] <- c(beach.data[(k+1), "Year"], mean(tmp), 
+    line.df[k+1,] <- c(beach.data[(k+1), "Year"], 
+                       mean(tmp), 
                        quantile(tmp, c(0.025,0.975)))  
   }
 
   p.estimates <- ggplot() +
-    geom_point(data = beach.data, 
-               aes(x = Year, y = Nests), 
+    geom_point(data = beach.data,
+               aes(x = Year, y = Nests),
                color = "red") +
-    geom_path(data = beach.data, 
-              aes(x = Year, y = Nests), 
+    geom_path(data = beach.data,
+              aes(x = Year, y = Nests),
               color = "red") +
-    geom_ribbon(data = line.df, 
-                aes(x = Year, 
-                    ymin = exp(low2.5),
-                    ymax = exp(high97.5)),
+    geom_ribbon(data = line.df,
+                aes(x = Year,
+                    ymin = (low2.5),
+                    ymax = (high97.5)),
                 fill = "orange", alpha = 0.4) +
-    geom_path(data = line.df, 
-              aes(x = Year, y = exp(Mean)),
+    geom_path(data = line.df,
+              aes(x = Year, y = (Mean)),
               size = 1.2) +
-    xlab("") + xlab("Number of nests") + 
-    ggtitle(beach.name) 
-  
-  
+    geom_rect(aes(xmin = min(change.point.samples) + min(median.yr$year),
+                  xmax = max(change.point.samples) + min(median.yr$year),
+                  ymin = 0, ymax = max(beach.data$Nests) + 1),
+              fill = "lightblue", alpha = 0.5) +
+    xlab("") + ylab("Number of nests") +
+    ggtitle(beach.name)
+
+
   if (save.fig)
     ggsave(p.estimates,
            filename = paste0("figures/estimates_beach_", ID, ".png"),
            device = "png", dpi = 600)
+  
+  p.slope2.density <- ggplot() + 
+    geom_density(data = data.frame(a1.2 = a1.2.samples),
+                 aes(x = a1.2), color = "darkblue") +
+    geom_density(data = data.frame(a1.1 = a1.1.samples),
+                 aes(x = a1.1), color = "darkred") +
+    xlab("Slopes before (red) and after (blue) the change point") + 
+    ylab("Density") + 
+    ggtitle(beach.name)
+  
+  if (save.fig)
+    ggsave(p.slope2.density,
+           filename = paste0("figures/slopes_density_", ID, ".png"),
+           device = "png", dpi = 600)
+  
+  # p.estimates.2 <- ggplot() +
+  #   geom_point(data = beach.data,
+  #              aes(x = Year, y = Nests),
+  #              color = "red") +
+  #   geom_path(data = beach.data,
+  #             aes(x = Year, y = Nests),
+  #             color = "red") +
+  #   geom_ribbon(data = beach.data,
+  #               aes(x = Year,
+  #                   ymin = Low2.5,
+  #                   ymax = High97.5),
+  #               fill = "orange", alpha = 0.4) +
+  #   geom_path(data = beach.data,
+  #             aes(x = Year, y = Mean),
+  #             size = 1.2) +
+  #   xlab("") + ylab("Number of nests") +
+  #   ggtitle(beach.name)
 }
+
 
 
 ```
 
 
-Some beaches don't look right... check what's going on. 2022-01-28
+Next is to look at the posteriors of the slopes for after the change point for all locations (a1.2). The vast majority should be negative with some positive and zeros. This should indicate the beaches that are declining since the change point.
+
+```{r}
+
+```
+

@@ -244,7 +244,7 @@ high_pareto_k <- sum(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out$diagnostics$pareto_
 high_pareto_k
 ```
 
-Pareto k statistic isn't great though... About `r round(high_pareto_k, 1) *100` % were > 0.7. Should we be concerned?  
+Pareto k statistic isn't great though... mocShould we be concerned?  
 
 ```{r}
 
@@ -288,7 +288,8 @@ mcmc_dens(jm$samples, c("sigma.e", "year.change"))
 
 
 
-Look at each beach:
+Look at each beach. Also look at the posteriors of the slopes for after the change point for all locations (a1.2). The vast majority should be negative with some positive and zeros. This should indicate the beaches that are declining since the change point.
+
 
 ```{r}
 
@@ -440,9 +441,25 @@ for (b in 1:nrow(FL_beach_ID)){
 ```
 
 
-Next is to look at the posteriors of the slopes for after the change point for all locations (a1.2). The vast majority should be negative with some positive and zeros. This should indicate the beaches that are declining since the change point.
+Compare this with the one-slope model output
 
 ```{r}
+loo.out.2slopes <- readRDS(file = "RData/LOOIC_r2Slopes_rInt_3Covs_FL.rds")
+loo.out.1slope <- readRDS(file = "RData/LOOIC_rSlope_rInt_logD_FL.rds")
+jm.1slope <- readRDS(file = "RData/JAGS_out_rSlope_rInt_logD_FL.rds")
 
+loo.final.df <- data.frame(slope = c("1slope", "2slopes"),
+                           model = c("logD", "3Covs"),
+                           looic = c(loo.out.1slope$loo.out$estimates["looic", "Estimate"],
+                                     loo.out.2slopes$loo.out$estimates["looic", "Estimate"]),
+                           DIC = c(jm.1slope$DIC, jm$DIC)) %>%
+  mutate(dDIC = DIC - min(DIC)) %>%
+  arrange(-desc(looic))
 ```
+
+
+So, it appears that there is evidence for using two-slope models. 
+
+A write up for FL is in FL_report_Feb2022.Rmd.
+
 

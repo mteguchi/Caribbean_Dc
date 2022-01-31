@@ -20,7 +20,7 @@ library(bayesplot)
 library(stringr)
 
 source("Caribbean_Dc_fcns.R")
-save.fig <- F
+save.fig <- T
 MCMC.params <- list(n.samples = 75000,
                     n.burnin = 55000,
                     n.thin = 5,

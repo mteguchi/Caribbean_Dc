@@ -103,7 +103,7 @@ FL.nest.counts.0 %>% filter(ID %in% FL.lat.dat$ID) -> FL.nest.counts
 # 2002 and 2012. 
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
-                     count = FL.nest.counts$nests,
+                     log.count = log(FL.nest.counts$nests + 1),
                      beach = median.yr$ID3,
                      yearc = median.yr$year - min(median.yr$year),
                      latc = FL.lat.dat$latc,

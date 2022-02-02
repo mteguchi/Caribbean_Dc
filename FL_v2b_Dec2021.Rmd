@@ -161,7 +161,7 @@ X.FL <- list(cbind(log(FL.nest.counts$distance) -
 #jm <- list(length = length(out.names))
 loo.out <- list()
 Rmax <- vector(mode = "numeric", length = length(out.names))
-
+k <- 1
 for (k in 1:length(out.names)){
   MCMC.params$model.file = paste0("models/Model_JAGS_r2Slopes_rInt_",
                                   model.names[k], ".txt")

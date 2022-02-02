@@ -216,7 +216,7 @@ loo.all <- lapply(loo.out, FUN = function(X) X$loo.out) %>%
          %>% select(Estimate)) %>%
   unlist()
 
-looic.df.Poi <- data.frame(ID = seq(1, length(model.names)),
+looic.df.Norm <- data.frame(ID = seq(1, length(model.names)),
                            model = model.names,
                            cov = out.names,
                            looic = loo.all,
@@ -233,7 +233,7 @@ looic.df.Poi <- data.frame(ID = seq(1, length(model.names)),
 Then... use LOOIC or DIC to compare these models. 
 
 ```{r}
-looic.df.Poi
+looic.df.Norm
 ```
 
 Looks like the 3 covariate model is the best. Rhat statistics look fine. 

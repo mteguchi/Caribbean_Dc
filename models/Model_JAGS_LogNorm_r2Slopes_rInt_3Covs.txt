@@ -19,8 +19,8 @@ model{
 		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + beta[1] * X[i,1] + beta[2] * X[i,2] + beta[3] * X[i,3] + epsilon[i])
 		
 		tau.y[i] <- ifelse(yearc[i] < year.change,
-							pow(sigma.y[1], -2),
-							pow(sigma.y[2], -2))
+							pow(sigma.y[beach[i], 1], -2),
+							pow(sigma.y[beach[i], 2], -2))
 
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
@@ -36,6 +36,11 @@ model{
 		a1.1[j] ~ dnorm(0, 0.01)  #I(0,)
 		a1.2[j] ~ dnorm(0, 0.01)  #I(,0)
 
+		for (k in 1:2){
+			sigma.y[j, k] ~ dgamma(2, 0.1)
+		}
+
+
 	}
 	
 	year.change ~ dunif(minT, maxT)
@@ -48,9 +53,5 @@ model{
 		
 	}
 	
-	for (k in 1:2){
-		sigma.y[k] ~ dgamma(2, 0.1)
-
-	}
 
 }

@@ -13,12 +13,16 @@
 
 model{
 	for(i in 1:N){
-		log.count[i] ~ dnorm(log(mu[i]), tau.y)
+		log.count[i] ~ dnorm(log(mu[i]), tau.y[i])
 		resid[i] <- log.count[i] - log(mu[i])  # computes residuals
 		log(mu[i]) <- ifelse(yearc[i] < year.change,
 		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + epsilon[i],
 		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + epsilon[i])
 		
+		tau.y[i] <- ifelse(yearc[i] < year.change,
+							pow(sigma.y[1], -2),
+							pow(sigma.y[2], -2))
+
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
@@ -39,7 +43,8 @@ model{
 	tau.e <- pow(sigma.e, -2)
 	sigma.e ~ dgamma(2, 0.1) #dunif(0, 100)
 	
-	tau.y <- pow(sigma.y, -2)
-	sigma.y ~ dgamma(2, 0.5) #dunif(0, 100)
+	for (k in 1:2){
+		sigma.y[k] ~ dgamma(2, 0.1)
 
+	}
 }

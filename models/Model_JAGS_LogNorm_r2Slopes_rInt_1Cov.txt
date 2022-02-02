@@ -22,11 +22,11 @@ model{
 		tau.y[i] <- ifelse(yearc[i] < year.change,
 							pow(sigma.y[1], -2),
 							pow(sigma.y[2], -2))
-							
+
 		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
 		epsilon[i] ~ dnorm(0, tau.e)    
 
-		loglik[i] <- logdensity.norm(log.count[i], log(mu[i]), tau.y)
+		loglik[i] <- logdensity.norm(log.count[i], log(mu[i]), tau.y[i])
 	}
 
 	for (j in 1:nbeach){

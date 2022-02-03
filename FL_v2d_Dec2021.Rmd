@@ -103,7 +103,7 @@ FL.nest.counts.0 %>% filter(ID %in% FL.lat.dat$ID) -> FL.nest.counts
 # 2002 and 2012. 
 FL.jags.data <- list(N = length(FL.nest.counts$nests),
                      nbeach = length(unique(FL.nest.counts$ID2)),
-                     log.count = log(FL.nest.counts$nests + 1),
+                     count = FL.nest.counts$nests,
                      beach = median.yr$ID3,
                      yearc = median.yr$year - min(median.yr$year),
                      latc = FL.lat.dat$latc,
@@ -255,9 +255,9 @@ plot(loo.out[[looic.df.Poi[1,"ID"]]]$loo.out)
 Not sure if I should be concerned about these or just ignore them and move on... 
 
 ```{r}
-jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_r2Slopes_rInt_",
+jm <- readRDS(file = paste0("RData/JAGS_out_r2Slopes_rInt_",
                                 out.names[looic.df.Poi[1,"ID"]],
-                                 "_FL.rds"))
+                                 "_a_FL.rds"))
 
 # Make a look up table for beach name vs beach ID vs jags' beach ID
 FL.nest.counts %>% select(ID, beach_f) %>%
@@ -285,7 +285,43 @@ mcmc_dens(jm$samples, c("sigma.e", "year.change"))
 
 ```
 
+```{r}
+mcmc_dens(jm$samples, c("beta[1,1]","beta[1,2]","beta[1,3]",
+                        "beta[2,1]","beta[2,2]","beta[2,3]"))
+```
 
+
+
+```{r}
+ # beta parameters
+beta.1.1.samples <- extract.samples("beta[1,1]", jm$samples)
+beta.1.2.samples <- extract.samples("beta[1,2]", jm$samples)
+beta.1.3.samples <- extract.samples("beta[1,3]", jm$samples)
+
+beta.2.1.samples <- extract.samples("beta[2,1]", jm$samples)
+beta.2.2.samples <- extract.samples("beta[2,2]", jm$samples)
+beta.2.3.samples <- extract.samples("beta[2,3]", jm$samples)
+
+betas.df <- data.frame(samples = c(beta.1.1.samples, beta.1.2.samples, beta.1.3.samples,
+                                   beta.2.1.samples, beta.2.2.samples, beta.2.3.samples),
+                       pars = c(rep("beta.1.1", times = length(beta.1.1.samples)),
+                                rep("beta.1.2", times = length(beta.1.2.samples)),
+                                rep("beta.1.3", times = length(beta.1.3.samples)),
+                                rep("beta.2.1", times = length(beta.2.1.samples)),
+                                rep("beta.2.2", times = length(beta.2.2.samples)),
+                                rep("beta.2.3", times = length(beta.2.3.samples))))
+
+p.betas.density <- ggplot(data = betas.df) +
+  geom_density(aes(x = samples), color = "darkblue") +
+  facet_wrap(vars(pars), nrow = 2, scales = "free") +
+  xlab("") + 
+  ylab("Density") 
+
+if (save.fig)
+    ggsave(p.betas.density,
+           filename = paste0("figures/Poi_a_betas_density.png"),
+           device = "png", dpi = 600)
+```
 
 
 Look at each beach. Also look at the posteriors of the slopes for after the change point for all locations (a1.2). The vast majority should be negative with some positive and zeros. This should indicate the beaches that are declining since the change point.
@@ -305,6 +341,7 @@ summary.mu.df <- FL.summary.df[grep(pattern = "^mu\\[([0-9]+)\\]",
 
 # change point
 change.point.samples <- extract.samples("year.change", jm$samples)
+
 
 b <- 24
 for (b in 1:nrow(FL_beach_ID)){
@@ -344,10 +381,7 @@ for (b in 1:nrow(FL_beach_ID)){
   a1.1.samples <- extract.samples(paste0("a1.1[", jagsID, "]"), jm$samples)
   a1.2.samples <- extract.samples(paste0("a1.2[", jagsID, "]"), jm$samples)
 
-  beta.1.samples <- extract.samples("beta[1]", jm$samples)
-  beta.2.samples <- extract.samples("beta[2]", jm$samples)
-  beta.3.samples <- extract.samples("beta[3]", jm$samples)
-  
+ 
   line.df <- data.frame(Year = as.numeric(),
                         Mean = as.numeric(),
                         low2.5 = as.numeric(),
@@ -358,12 +392,12 @@ for (b in 1:nrow(FL_beach_ID)){
     # intercept is the same for all locations.
     t <- beach.data[(k+1), "Year"] - min(median.yr$year) #k + min(beach.data$Year)
     if (t < median(change.point.samples)){
-      tmp <- exp(a0.1.samples + a1.1.samples * t + beta.1.samples * beach.data$X1[k+1] + 
-        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1])
+      tmp <- exp(a0.1.samples + a1.1.samples * t + beta.1.1.samples * beach.data$X1[k+1] + 
+        beta.1.2.samples * beach.data$X2[k+1] + beta.1.3.samples * beach.data$X3[k+1])
       
     } else {
-      tmp <- exp(a0.2.samples + a1.2.samples * t + beta.1.samples * beach.data$X1[k+1] + 
-        beta.2.samples * beach.data$X2[k+1] + beta.3.samples * beach.data$X3[k+1])
+      tmp <- exp(a0.2.samples + a1.2.samples * t + beta.2.1.samples * beach.data$X1[k+1] + 
+        beta.2.2.samples * beach.data$X2[k+1] + beta.2.3.samples * beach.data$X3[k+1])
     }
     
     line.df[k+1,] <- c(beach.data[(k+1), "Year"], 
@@ -395,7 +429,7 @@ for (b in 1:nrow(FL_beach_ID)){
 
   if (save.fig)
     ggsave(p.estimates,
-           filename = paste0("figures/estimates_beach_", ID, ".png"),
+           filename = paste0("figures/Poi_a_estimates_beach_", ID, ".png"),
            device = "png", dpi = 600)
 
   p.slope2.density <- ggplot() + 
@@ -409,9 +443,11 @@ for (b in 1:nrow(FL_beach_ID)){
   
   if (save.fig)
     ggsave(p.slope2.density,
-           filename = paste0("figures/slopes_density_", ID, ".png"),
+           filename = paste0("figures/Poi_a_slopes_density_", ID, ".png"),
            device = "png", dpi = 600)
   
+ 
+
   # Although the means (mus) are the parameter for Poisson distribution,
   # plotting mus doesn't do well because they basically follow the same
   # pattern as the data points - computing the mean value, without
@@ -444,21 +480,28 @@ for (b in 1:nrow(FL_beach_ID)){
 Compare this with the one-slope model output
 
 ```{r}
+loo.out.2slopes.2betas <- readRDS(file = "RData/LOOIC_r2Slopes_rInt_3Covs_a_FL.rds")
 loo.out.2slopes <- readRDS(file = "RData/LOOIC_r2Slopes_rInt_3Covs_FL.rds")
 loo.out.1slope <- readRDS(file = "RData/LOOIC_rSlope_rInt_logD_FL.rds")
 jm.1slope <- readRDS(file = "RData/JAGS_out_rSlope_rInt_logD_FL.rds")
+jm.2slopes <- readRDS(file = "RData/JAGS_out_r2Slopes_rInt_3Covs_FL.rds")
 
-loo.final.df <- data.frame(slope = c("1slope", "2slopes"),
-                           model = c("logD", "3Covs"),
+loo.final.df <- data.frame(slope = c("1slope", "2slopes", "2slopes_2betas"),
+                           model = c("logD", "3Covs", "3Covs"),
                            looic = c(loo.out.1slope$loo.out$estimates["looic", "Estimate"],
-                                     loo.out.2slopes$loo.out$estimates["looic", "Estimate"]),
-                           DIC = c(jm.1slope$DIC, jm$DIC)) %>%
+                                     loo.out.2slopes$loo.out$estimates["looic", "Estimate"],
+                                     loo.out.2slopes.2betas$loo.out$estimates["looic", "Estimate"]),
+                           DIC = c(jm.1slope$DIC, jm$DIC, jm.2slopes$DIC)) %>%
   mutate(dDIC = DIC - min(DIC)) %>%
   arrange(-desc(looic))
+
+loo.final.df
 ```
 
 
-So, it appears that there is evidence for using two-slope models. 
+So, it appears that there is evidence for using two-slope-two-beta models. 
+
+Still working on normal likelihood models... 2022-02-03
 
 A write up for FL is in FL_report_Feb2022.Rmd.
 

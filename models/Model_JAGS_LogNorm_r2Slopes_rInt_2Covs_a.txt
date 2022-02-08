@@ -1,0 +1,57 @@
+# Original model by Michelle Sims:
+# Model 2: Model with random effects for slope and intercept and latitude quadratic plus 
+# overdispersion - this time I did log distance
+# adjusted model  - now computes residuals and computes bayesian p-value using deviance
+
+# converted to run in JAGS - TE
+# Random effects for slope and intercept and takes 2 covariates. 
+# Changed the likelihood from Poisson to Normal 2021-11-05
+
+# 2020-03-10
+
+model{
+	for(i in 1:N){
+		log.count[i] ~ dnorm(log(mu[i]), tau.y[i])
+		resid[i] <- log.count[i] - log(mu[i])  # computes residuals
+		log(mu[i]) <- ifelse(yearc[i] < year.change,
+		                    a0.1[beach[i]] + a1.1[beach[i]] * yearc[i] + beta[1,1] * X[i,1] + beta[1,2] * X[i,2] + epsilon[i],
+		                    a0.2[beach[i]] + a1.2[beach[i]] * yearc[i] + beta[2,1] * X[i,1] + beta[2,2] * X[i,2] + epsilon[i])
+
+		tau.y[i] <- ifelse(yearc[i] < year.change,
+							pow(sigma.y[beach[i], 1], -2),
+							pow(sigma.y[beach[i], 2], -2))
+
+		# overdispersion part - if sigma.e >> 0, then overdispersed according to the publication
+		epsilon[i] ~ dnorm(0, tau.e)    
+
+		loglik[i] <- logdensity.norm(log.count[i], log(mu[i]), tau.y[i])
+
+	}
+
+	for (j in 1:nbeach){
+		a0.1[j] ~ dnorm(0, 0.01)
+		a0.2[j] ~ dnorm(0, 0.01)
+	
+		a1.1[j] ~ dnorm(0, 0.01)  #I(0,)
+		a1.2[j] ~ dnorm(0, 0.01)  #I(,0)
+
+		for (k in 1:2){
+			sigma.y[j, k] ~ dgamma(2, 0.1)
+		}
+
+	}
+	
+	year.change ~ dunif(minT, maxT)
+	
+	tau.e <- pow(sigma.e, -2)
+	sigma.e ~ dgamma(2, 0.1) #dunif(0, 100)
+
+	for(k in 1:2){
+		for (j in 1:2){
+			beta[j,k] ~ dnorm(0, 0.01)
+		}
+		
+	}
+	
+
+}

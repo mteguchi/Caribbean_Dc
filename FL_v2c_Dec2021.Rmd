@@ -5,6 +5,8 @@ output: html_notebook
 
 In v2a, I looked at site-specific change in slopes. It appeared that the year.change parameter was not converging well. Posteriors were quite diffuse over the parameter space. In v2b, I used a single year.change parameter for all locations. In this version (v2c), I use normal likelihood, rather than Poisson, as it was better when analyzing STX data. 
 
+Some beaches don't have good data to be included - too many zeros, which return error in fitting the normal likelihood. If I remove some beaches, I won't be able to compare with the Poisson model outputs. So... I decided that the maximum count for each beach has to be at least 10 and run all models again. This restriction reduces the number of datasets from 68 to 35. 
+
 FL_PR_STX_v0_Sept2020.Rmd contains all time series, although the plots are in the log scale. The hypothesis is that if the change in trends happened around the same time as what was found in STX. At Sandy Point, STX, the change point happened around 20-30 years since 1982 (2002 - 2012). So, we want to have time series that contains at least 5 years before (1997) and 5 years after (2017). 
 
 New data were received in August 2020. 
@@ -25,6 +27,11 @@ MCMC.params <- list(n.samples = 75000,
                     n.burnin = 55000,
                     n.thin = 5,
                     n.chains = 5)
+
+# MCMC.params <- list(n.samples = 750,
+#                     n.burnin = 550,
+#                     n.thin = 5,
+#                     n.chains = 5)
 
 n.per.chain <- (MCMC.params$n.samples - MCMC.params$n.burnin)/MCMC.params$n.thin
 
@@ -64,7 +71,7 @@ FL.nest.counts.0 %>%
   summarise(n = n()) -> FL.ns
 
 FL.nest.counts.0 %>% 
-  select(ID2, ID, latitude, beach_f, year) %>% 
+  select(ID2, ID, latitude, beach_f, year, nests) %>% 
   group_by(ID) %>%
   summarise(ID2 = first(ID2),
             name = first(beach_f),
@@ -72,7 +79,9 @@ FL.nest.counts.0 %>%
             median.yr = median(year),
             min.yr = min(year),
             max.yr = max(year),
-            n = n()) %>%
+            n = n(),
+            max.n = max(nests)) %>%
+  filter(max.n > 9) %>%
   filter(min.yr <= year.1 & max.yr >= year.2) %>%
   rownames_to_column(var = "ID3") %>%
   mutate(latc = latitude - mean(latitude),
@@ -164,11 +173,11 @@ Rmax <- vector(mode = "numeric", length = length(out.names))
 
 for (k in 1:length(out.names)){
   MCMC.params$model.file = paste0("models/Model_JAGS_LogNorm_r2Slopes_rInt_",
-                                  model.names[k], ".txt")
+                                  model.names[k], "_a.txt")
   FL.jags.data$X <- X.FL[[k]]
 
   if (!file.exists(paste0("RData/JAGS_out_LogNorm_r2Slopes_rInt_", 
-                          out.names[k], "_FL.rds"))){
+                          out.names[k], "_a_FL.rds"))){
     jm <- jags(data = FL.jags.data,
                #inits = inits,
                parameters.to.save= parameters,
@@ -182,27 +191,27 @@ for (k in 1:length(out.names)){
     
     saveRDS(jm, 
             file = paste0("RData/JAGS_out_LogNorm_r2Slopes_rInt_", 
-                          out.names[k], "_FL.rds"))
+                          out.names[k], "_a_FL.rds"))
     
   } else {
     jm <- readRDS(file = paste0("RData/JAGS_out_LogNorm_r2Slopes_rInt_",
-                                out.names[k], "_FL.rds"))
+                                out.names[k], "_a_FL.rds"))
   }
 
   Rmax[k] <- max(unlist(lapply(jm$Rhat, FUN = max)))
   
   if (!file.exists(paste0("RData/LOOIC_LogNorm_r2Slopes_rInt_", 
-                          out.names[k], "_FL.rds"))){
+                          out.names[k], "_a_FL.rds"))){
     loo.out[[k]] <- compute.LOOIC(loglik = jm$sims.list$loglik, 
-                                  data.vector = FL.jags.data$count, 
+                                  data.vector = FL.jags.data$log.count, 
                                   MCMC.params = MCMC.params)
     saveRDS(loo.out[[k]], 
             file = paste0("RData/LOOIC_LogNorm_r2Slopes_rInt_",
-                          out.names[k], "_FL.rds"))
+                          out.names[k], "_a_FL.rds"))
     
   } else {
     loo.out[[k]] <- readRDS(file = paste0("RData/LOOIC_LogNorm_r2Slopes_rInt_",
-                                          out.names[k], "_FL.rds"))
+                                          out.names[k], "_a_FL.rds"))
   }
   
 }

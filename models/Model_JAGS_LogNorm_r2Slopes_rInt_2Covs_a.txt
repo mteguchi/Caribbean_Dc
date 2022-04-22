@@ -7,6 +7,8 @@
 # Random effects for slope and intercept and takes 2 covariates. 
 # Changed the likelihood from Poisson to Normal 2021-11-05
 
+# In this vesion (_a), I have beta parameters that are specific to before/after year.change. 2022-02-08
+
 # 2020-03-10
 
 model{
